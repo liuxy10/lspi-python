@@ -46,7 +46,7 @@ The Policy class should not need to be modified when using this library.
 The basis functions all inherit from the abstract base class :class:`lspi.basis_functions.BasisFunction`. This
 class provides the minimum interface for a basis function. Instances of this class
 may contain specialized fields and methods. There are a handful of basis function
-classes provided in this package including: :class:`lspi.basis_functions.FakeBasis`, :class:`lspi.basis_functions.ExactBasis`,
+classes provided in this package including: :class:`lspi.basis_functions.DummyBasis`, :class:`lspi.basis_functions.ExactBasis`,
 :class:`lspi.basis_functions.OneDimensionalPolynomialBasis`, and :class:`lspi.basis_functions.RadialBasisFunction`. See
 each class for its respective construction parameters and how the basis is calculated.
 You can also implement your own BasisFunctions by inheriting from the BasisFunction class and implementing

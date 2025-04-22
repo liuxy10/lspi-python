@@ -10,7 +10,7 @@ class TestChainDomainLearning(TestCase):
     def setUp(self):
         self.domain = lspi.domains.ChainDomain()
 
-        sampling_policy = lspi.Policy(lspi.basis_functions.FakeBasis(2), .9, 1)
+        sampling_policy = lspi.Policy(lspi.basis_functions.DummyBasis(2), .9, 1)
 
         self.samples = []
         for i in range(1000):

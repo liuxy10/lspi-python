@@ -79,26 +79,31 @@ class LSTDQSolver(Solver):
         np.fill_diagonal(a_mat, self.precondition_value)
 
         b_vec = np.zeros((k, 1))
+        # print(f"data: {data}")
 
         for sample in data:
-            phi_sa = (policy.basis.evaluate(sample.state, sample.action)
+            phi_sa = (policy.basis.evaluate(np.array(sample.state), np.array(sample.action))
                       .reshape((-1, 1)))
 
             if not sample.absorb:
-                best_action = policy.best_action(sample.next_state)
+                best_action = policy.best_action(np.array(sample.next_state))
                 phi_sprime = (policy.basis
-                              .evaluate(sample.next_state, best_action)
+                              .evaluate(np.array(sample.next_state), best_action)
                               .reshape((-1, 1)))
             else:
                 phi_sprime = np.zeros((k, 1))
 
-            a_mat += phi_sa.dot((phi_sa - policy.discount*phi_sprime).T)
-            b_vec += phi_sa*sample.reward
-
+            a_mat += phi_sa.dot((phi_sa - policy.discount*phi_sprime).T) 
+            b_vec += phi_sa*sample.reward 
+        # print(f"a_mat: {a_mat}")
         a_rank = np.linalg.matrix_rank(a_mat)
+        # print(f"a_rank: {a_rank}, k: {k}")
         if a_rank == k:
-            w = scipy.linalg.solve(a_mat, b_vec)
+            # print(f"solving a_mat: {a_mat.shape}, b_vec: {b_vec.shape} using np.linalg.pinv")
+            w = np.linalg.pinv(a_mat).dot(b_vec)
+            # print(f"w: {w}")
         else:
             logging.warning('A matrix is not full rank. %d < %d', a_rank, k)
             w = scipy.linalg.lstsq(a_mat, b_vec)[0]
+        # print(f"w: {w}, w.shape: {w.shape}, a_rank: {a_rank}, k: {k}")
         return w.reshape((-1, ))

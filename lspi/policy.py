@@ -5,7 +5,6 @@ import random
 
 import numpy as np
 
-
 class Policy(object):
 
     r"""Represents LSPI policy. Used for sampling, learning, and executing.
@@ -96,7 +95,7 @@ class Policy(object):
         return Policy(self.basis,
                       self.discount,
                       self.explore,
-                      self.weights.copy(),
+                      np.copy(self.weights),
                       self.tie_breaking_strategy)
 
     def calc_q_value(self, state, action):

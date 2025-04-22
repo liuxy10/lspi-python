@@ -5,7 +5,7 @@ from unittest import TestCase
 import lspi
 from lspi.solvers import Solver
 from lspi.policy import Policy
-from lspi.basis_functions import FakeBasis
+from lspi.basis_functions import DummyBasis
 import numpy as np
 
 class SolverStub(Solver):
@@ -78,7 +78,7 @@ class TestLearnFunction(TestCase):
         max_iterations_solver = MaxIterationsSolverStub()
 
         lspi.learn(None,
-                   Policy(FakeBasis(1)),
+                   Policy(DummyBasis(1)),
                    max_iterations_solver,
                    epsilon=10**-200,
                    max_iterations=10)
@@ -94,7 +94,7 @@ class TestLearnFunction(TestCase):
         epsilon_solver = EpsilonSolverStub(10**-21)
 
         lspi.learn(None,
-                   Policy(FakeBasis(1)),
+                   Policy(DummyBasis(1)),
                    epsilon_solver,
                    epsilon=10**-20,
                    max_iterations=1000)
@@ -104,7 +104,7 @@ class TestLearnFunction(TestCase):
     def test_returns_policy_with_new_weights(self):
         """Test if the weights in the new policy differ and are not the same underlying numpy vector."""
 
-        initial_policy = Policy(FakeBasis(1))
+        initial_policy = Policy(DummyBasis(1))
 
         weight_solver = WeightSolverStub(initial_policy.weights)
 
@@ -116,7 +116,7 @@ class TestLearnFunction(TestCase):
         self.assertEqual(weight_solver.num_calls, 1)
         self.assertFalse(np.may_share_memory(initial_policy.weights,
                                              new_policy))
-        self.assertNotEquals(id(initial_policy), id(new_policy))
+        self.assertNotEqual(id(initial_policy), id(new_policy))
         np.testing.assert_array_almost_equal(new_policy.weights,
                                              weight_solver.weights)
 
@@ -124,7 +124,7 @@ class TestLearnFunction(TestCase):
         """Test that the solver is passed the data and policy."""
 
         data = [10]
-        initial_policy = Policy(FakeBasis(1))
+        initial_policy = Policy(DummyBasis(1))
 
         solver_stub = SolverParamStub(data, initial_policy)
 

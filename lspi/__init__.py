@@ -14,9 +14,12 @@ http://www.cs.duke.edu/research/AI/LSPI/
 
 """
 
-import basis_functions  # noqa
-import domains  # noqa
-from lspi import learn  # noqa
-from policy import Policy  # noqa
-from sample import Sample  # noqa
-import solvers  # noqa
+
+
+from lspi import basis_functions  # noqa
+from lspi import domains  # noqa
+from lspi.lspi import learn  # noqa
+from lspi.policy import Policy  # noqa
+from lspi.policy_ct import QuadraticPolicy  # noqa
+from lspi.sample import Sample  # noqa
+from lspi import solvers  # noqa

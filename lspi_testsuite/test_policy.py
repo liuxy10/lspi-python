@@ -2,14 +2,14 @@
 from unittest import TestCase
 
 from lspi.policy import Policy
-from lspi.basis_functions import FakeBasis, OneDimensionalPolynomialBasis
+from lspi.basis_functions import DummyBasis, OneDimensionalPolynomialBasis
 import numpy as np
 from copy import copy
 
 class TestPolicy(TestCase):
 
     def create_policy(self, *args, **kwargs):
-        return Policy(FakeBasis(5), *args, **kwargs)
+        return Policy(DummyBasis(5), *args, **kwargs)
 
     @staticmethod
     def list_has_duplicates(list, num_places=4):
@@ -30,7 +30,7 @@ class TestPolicy(TestCase):
     def test_default_constructor(self):
         policy = self.create_policy()
 
-        self.assertTrue(isinstance(policy.basis, FakeBasis))
+        self.assertTrue(isinstance(policy.basis, DummyBasis))
         self.assertAlmostEqual(policy.discount, 1.0)
         self.assertAlmostEqual(policy.explore, 0.0)
         self.assertEqual(policy.weights.shape, (1,))
@@ -41,7 +41,7 @@ class TestPolicy(TestCase):
         policy = self.create_policy(.5, .1, np.array([1.]),
                                     Policy.TieBreakingStrategy.FirstWins)
 
-        self.assertTrue(isinstance(policy.basis, FakeBasis))
+        self.assertTrue(isinstance(policy.basis, DummyBasis))
         self.assertAlmostEqual(policy.discount, .5)
         self.assertAlmostEqual(policy.explore, 0.1)
         np.testing.assert_array_almost_equal(policy.weights, np.array([1.]))

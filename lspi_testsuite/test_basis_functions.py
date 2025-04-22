@@ -3,7 +3,7 @@
 from unittest import TestCase
 
 from lspi.basis_functions import (BasisFunction,
-    FakeBasis,
+    DummyBasis,
     OneDimensionalPolynomialBasis,
     RadialBasisFunction,
     ExactBasis)
@@ -75,9 +75,9 @@ class TestBasisFunction(TestCase):
             BasisFunction._validate_num_actions(0)
 
 
-class TestFakeBasis(TestCase):
+class TestDummyBasis(TestCase):
     def setUp(self):
-        self.basis = FakeBasis(6)
+        self.basis = DummyBasis(6)
 
     def test_num_actions_property(self):
         self.assertEqual(self.basis.num_actions, 6)

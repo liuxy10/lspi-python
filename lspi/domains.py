@@ -9,7 +9,7 @@ from random import randint, random
 
 import numpy as np
 
-from sample import Sample
+from lspi.sample import Sample
 
 
 class Domain(object):
@@ -289,7 +289,7 @@ class ChainDomain(Domain):
             if initial_state.shape != (1, ):
                 raise ValueError('The specified state did not match the '
                                  + 'current state size')
-            state = initial_state.astype(np.int)
+            state = initial_state.astype(np.int32)
             if state[0] < 0 or state[0] >= self.num_states:
                 raise ValueError('State value must be in range '
                                  + '[0, num_states)')
@@ -314,3 +314,6 @@ class ChainDomain(Domain):
     def __init_random_state(num_states):
         """Return randomly initialized state of the specified size."""
         return np.array([randint(0, num_states-1)])
+
+
+

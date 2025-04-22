@@ -32,15 +32,15 @@ class TestChainDomain(TestCase):
     def test_init_parameters_are_used(self):
         """Test that init parameters are used."""
 
-        self.assertEquals(self.domain.reward_location,
+        self.assertEqual(self.domain.reward_location,
                           self.reward_location)
-        self.assertEquals(self.domain.failure_probability,
+        self.assertEqual(self.domain.failure_probability,
                           self.failure_probability)
 
     def test_num_actions(self):
         """Test ChainDomain num_actions implementation."""
 
-        self.assertEquals(self.domain.num_actions(), 2)
+        self.assertEqual(self.domain.num_actions(), 2)
 
     def test_reset_with_no_specified_state(self):
         """Test reset with no specified state."""
@@ -55,7 +55,7 @@ class TestChainDomain(TestCase):
         self.domain.reset(new_state)
 
         curr_state = self.domain.current_state()
-        self.assertEquals(curr_state[0], 0)
+        self.assertEqual(curr_state[0], 0)
 
     def test_reset_with_diff_sized_state(self):
         """Test state vector with different sized state."""
@@ -82,8 +82,8 @@ class TestChainDomain(TestCase):
     def test_action_name(self):
         """Test action_name method."""
 
-        self.assertEquals(self.domain.action_name(0), "left")
-        self.assertEquals(self.domain.action_name(1), "right")
+        self.assertEqual(self.domain.action_name(0), "left")
+        self.assertEqual(self.domain.action_name(1), "right")
 
     def test_deterministic_left(self):
         """Test deterministic left action."""
@@ -103,8 +103,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(0)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 0)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 0)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -128,8 +128,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(0)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 0)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 0)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -153,8 +153,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -178,8 +178,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -203,8 +203,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(0)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 0)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 0)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -228,8 +228,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -253,8 +253,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(0)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 0)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 0)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -271,8 +271,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -296,8 +296,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -309,8 +309,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -322,8 +322,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -347,8 +347,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -364,8 +364,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(1)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 1)
-        self.assertEquals(sample.reward, 1)
+        self.assertEqual(sample.action, 1)
+        self.assertEqual(sample.reward, 1)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
@@ -377,8 +377,8 @@ class TestChainDomain(TestCase):
 
         sample = chain_domain.apply_action(0)
         np.testing.assert_array_equal(sample.state, starting_state)
-        self.assertEquals(sample.action, 0)
-        self.assertEquals(sample.reward, 0)
+        self.assertEqual(sample.action, 0)
+        self.assertEqual(sample.reward, 0)
         np.testing.assert_array_equal(sample.next_state, expected_state)
         self.assertFalse(sample.absorb)
         np.testing.assert_array_equal(chain_domain.current_state(),
