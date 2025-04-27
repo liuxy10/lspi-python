@@ -6,8 +6,24 @@ from lspi.basis_functions import (BasisFunction,
     DummyBasis,
     OneDimensionalPolynomialBasis,
     RadialBasisFunction,
-    ExactBasis)
+    ExactBasis,
+    QuadraticBasisFunction)
 import numpy as np
+
+
+class TestQuadraticBasisFunction(TestCase):
+    def setUp(self):
+        self.basis = QuadraticBasisFunction(2, 3)
+    
+    def test_specify_state_dim(self):
+        self.assertEqual(self.basis.state_dim, 2)
+    
+    def test_specify_action_dim(self):
+        self.assertEqual(self.basis.action_dim, 3)
+    
+    def test_num_actions_property(self):
+        self.assertEqual(self.basis.num_actions, 3)
+    
 
 class TestBasisFunction(TestCase):
     def test_require_size_method(self):

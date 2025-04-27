@@ -28,6 +28,7 @@ class QuadraticPolicy(Policy):
         self.first_stiff_timing = 0.0
         self.second_stiff_timing = 0.0
         self.rl_number = rl_number
+        # self.num_actions = self.n_action
         
     def cp(self):
         """Return a copy of this class with a deep copy of the weights."""
@@ -37,7 +38,14 @@ class QuadraticPolicy(Policy):
                        self.explore,
                        np.copy(self.weights)
                        )
+    
+    def calc_q_value(self, state, action):
+        # if action.shape[0] < 0 or action >= self.n_action:
+        #     raise IndexError('action must be in range [0, num_actions)')
+        Huu, Hf = self.extract_qp_parameters(state)
+        q = - 0.5 * action[None,:] @ Huu @ action[:,None] - Hf @ action[:,None]
 
+        return q # self.weights.dot(self.basis.evaluate(state, action))
 
     def update_state_dependent_constraints(self, first_stiff_timing, second_stiff_timing):
         self.first_stiff_timing = first_stiff_timing
@@ -46,46 +54,55 @@ class QuadraticPolicy(Policy):
     def select_action(self, state):
         """Select action with ε-greedy exploration."""
         if random.random() < self.explore:
-            return np.random.uniform(low=-0.12, high=0.12, size=2)
+            return np.random.uniform(low=-0.12, high=0.12, size=self.n_action)
         return self.best_action(state)
 
     def best_action(self, state):
+        Huu, Hf = self.extract_qp_parameters(state) 
+
+
+        # A = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])  # Action bounds
+        
+        # Ax = np.array([
+        #     -0.01 + self.first_stiff_timing,
+        #     0.5 - self.first_stiff_timing,
+        #     -0.5 + self.second_stiff_timing,
+        #     0.98 - self.second_stiff_timing
+        # ]) # Action bounds
+        
+        # Solve constrained optimization
+        res = minimize(
+            fun=lambda a: 0.5 * a[None,:] @ Huu @ a[:,None] + Hf @ a[:,None], 
+            x0=np.zeros((self.n_action,)),
+            bounds=[(-1, 1)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
+            # constraints={'type': 'ineq', 'fun': lambda a: A @ a - Ax}
+        )
+        action = res.x
+        
+        # Add exploration noise
+        # exploration = False
+        # if exploration:
+        #     noise_scale = max(0, 1 - self.rl_number/3)
+        #     action += noise_scale * np.random.uniform(-0.15, 0.15, size=action.shape)
+        
+        # Apply post-optimization constraints
+        # action = self._apply_action_constraints(action)
+        return action
+
+    def extract_qp_parameters(self, state):
         """Solve quadratic program for optimal action with constraints."""
         nS = self.n_state  # State dimensions
         nSA = self.n_state + self.n_action  # State+action dimensions
         
         HW = convertW2S(self.weights)
         # Extract weight submatrices
-        Hux = HW[nS:nSA, :nS]
+        Hux = HW[nS:nSA, :nS] 
         Huu = HW[nS:nSA, nS:nSA]
         Hxu = HW[:nS, nS:nSA]
         
         # Quadratic programming setup
         Hf = state.T @ Hxu
-        # A = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])  # Action bounds
-        # Ax = np.array([
-        #     -0.01 + self.first_stiff_timing,
-        #     0.5 - self.first_stiff_timing,
-        #     -0.5 + self.second_stiff_timing,
-        #     0.98 - self.second_stiff_timing
-        # ])
-        
-        # Solve constrained optimization
-        res = minimize(
-            fun=lambda a: 0.5 * a[None,:] @ Huu @ a[:,None] + Hf @ a[:,None],
-            x0=np.zeros((self.n_action,)),
-            bounds=[(-1, 1)],
-            # constraints={'type': 'ineq', 'fun': lambda a: A @ a - Ax}
-        )
-        action = res.x
-        
-        # Add exploration noise
-        noise_scale = max(0, 1 - self.rl_number/3)
-        action += noise_scale * np.random.uniform(-0.15, 0.15, size=action.shape)
-        
-        # Apply post-optimization constraints
-        # action = self._apply_action_constraints(action)
-        return action
+        return Huu,Hf
 
     def _apply_action_constraints(self, action):
         """Enforce physical constraints on actions."""
