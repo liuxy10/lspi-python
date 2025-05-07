@@ -1,14 +1,10 @@
 import numpy as np
 import os
-import sys
-from lspi.policy import Policy
-from lspi.basis_functions import ExactBasis, RadialBasisFunction
-from lspi.policy import Policy
-from lspi.policy_ct import QuadraticPolicy
-from lspi.sample import Sample
+
+from lspi.train_offline import lspi_loop_offline
 from lspi.solvers import LSTDQSolver
-import lspi
-from lspi import domains
+
+
 import numpy as np
 
 import pandas as pd
@@ -60,7 +56,7 @@ def feature_extractor(data_folder_path, cfg):
                                         np.argmax(dat["ACTUATOR_POSITION"])/100,
                                         # np.argmin(dat["ACTUATOR_POSITION"])/100
                                           ] for dat in data_list])
-                print(f"For param set: {param}, state values avg: {state_values.mean(axis=0)}, std: {state_values.std(axis=0)}")
+                # print(f"For param set: {param}, state values avg: {state_values.mean(axis=0)}, std: {state_values.std(axis=0)}")
                 # Append action values to all state samples and save as npy array
                 states_list.append(state_values) # states represent features from single gait cycle
                 
@@ -127,134 +123,80 @@ def add_quadratic_reward_stack(ssa_samples,  cfg, w_s = 0.8):
     return np.concatenate([ssa_samples, rew], axis=1)
 
 
-def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, initial_policy=None):
-
-    # Initialize random seed
-    # np.random.seed(int(sum(100 * np.random.rand())))
-    n_action = samples[0].action.shape[0]
-    n_state = samples[0].state.shape[0]
-    # Create a new policy
-    policy = QuadraticPolicy(n_action= n_action, n_state= n_state, explore = 0.01, discount = discount)
-    if initial_policy is None:
-        initial_policy = policy.cp()
-    
-    # Initialize policy iteration
-    iteration = 0
-    distance = float('inf')
-    all_policies = [initial_policy.cp()]
- 
-
-    # If no samples, return
-    if not samples:
-        print('Warning: Empty sample set')
-        return policy, all_policies
-    # Main LSPI loop
-    while iteration < max_iterations and distance > epsilon:
-        # Update and print the number of iterations
-        iteration += 1
-        print('*********************************************************')
-        print(f'LSPI iteration: {iteration}')
-        iteration == 1
-        # Evaluate the current policy (and implicitly improve)
-        policy = lspi.learn(samples, initial_policy.cp(), solver, epsilon=1e-2)
-        # Compute the distance between the. current and the previous policy
-        assert len(policy.weights) == len(all_policies[-1].weights), "Policy weights do not match"
-        difference = policy.weights - all_policies[-1].weights
-        lmax_norm = np.linalg.norm(difference, np.inf)
-        l2_norm = np.linalg.norm(difference)
-
-        distance = l2_norm
-
-        # Print some information
-        print(f'Norms -> Lmax: {lmax_norm:.6f}   L2: {l2_norm:.6f}')
-
-        # Store the current policy
-        all_policies.append(policy.cp())
-
-    # # Display some info
-    # print('*********************************************************')
-    # if distance > epsilon:
-    #     print(f'LSPI finished in {iteration} iterations WITHOUT CONVERGENCE to a fixed point')
-    # else:
-    #     print(f'LSPI converged in {iteration} iterations')
-    # print('*********************************************************')
-
-    return policy, all_policies
-
-
-
 def save_parameters_and_states(folder_path, params, states):
     np.save(os.path.join(folder_path, "params.npy"), params)
     for i in range(len(states)):
         state = states[i]
         np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
 
-if __name__ == "__main__":
-    folder_path = "/Users/xinyi/Documents/Data/ossur/DC_04_26"
-    cfg = json.load(open(f"{folder_path}.json"))
-    # cfg = json.load(open("udp/DC_04_26.json")) # for temp use
-    param_names = [v["name"] for v in cfg["control_variables"]]
-    # n_action = len(action_names)
-    use_save = False
-    if use_save:
-        # ssar = np.load("ssar.npy")
-        # n_state = (ssar.shape[1] - n_action - 1) // 2
-        params = np.load(os.path.join(folder_path, "params.npy"))
-        states = []
-        for i in range(len(params)):
-            state = np.load(os.path.join(folder_path, f"state_{i}.npy"))
-            states.append(state)
 
+def data_loader(folder_path, cfg_path, use_save=False):
+    """
+    Load and preprocess data for LSPI.
+
+    Args:
+        folder_path (str): Path to the data folder.
+        cfg_path (str): Path to the configuration JSON file.
+        use_save (bool): Whether to use saved data or process raw data.
+
+    Returns:
+        tuple: Processed parameters, states, and SSA samples with offsets and scales.
+    """
+    cfg = json.load(open(cfg_path))
+    param_names = [v["name"] for v in cfg["control_variables"]]
+
+    if use_save:
+        params = np.load(os.path.join(folder_path, "params.npy"))
+        states = [np.load(os.path.join(folder_path, f"state_{i}.npy")) for i in range(len(params))]
     else:
-        params, states = feature_extractor(
-                                        # data_folder_path= "udp/ossur/DC_04_26", 
-                                        data_folder_path=folder_path,
-                                        cfg= cfg
-                                        )
-        np.save(os.path.join(folder_path, "params.npy"), params)
-    
-        n_state = states[0].shape[1]
-        assert len(states) == params.shape[0], "states and params should have the same length"
-        # exit(0)
-        
-    
-    
-    # slice based on params:
+        params, states = feature_extractor(data_folder_path=folder_path, cfg=cfg)
+        save_parameters_and_states(folder_path, params, states)
+
+    # Slice based on params
     slice_params = np.array([63, -1, 41])
     slice_id = slice_params > 0
-    print("slicing params based on: ", slice_params)
+    print("Slicing params based on: ", slice_params)
     mask = np.all(params[:, slice_id] == slice_params[slice_id], axis=1)
     params = params[mask][:, ~slice_id]
     states = [states[i] for i in range(len(states)) if mask[i]]
-    n_state, n_action = states[0].shape[1], params.shape[1]
-    save_parameters_and_states(folder_path, params, states)
-    # print out some stats:
+
+    # Print stats
     for i in range(len(states)):
         state = states[i]
-        print(f"param set {i}: {params[i]} with {state.shape[0]} samples")
-        print(f"state avg, std: {state.mean(axis=0)}, {state.std(axis=0)}")
+        print(f"Param set {i}: {params[i]} with {state.shape[0]} samples")
+        print(f"State avg, std: {state.mean(axis=0)}, {state.std(axis=0)}")
         print("*" * 20)
-    
-    ssa_samples, offset, scale = create_ssa_samples(params, states, s_target = np.array([
-                                                    60, # max KA angle
-                                                    #  -0.0, # min KA angle
-                                                        0.66, # max KA phase var
-                                                    #  0.6 # min KA phase var
-                                                        ]), 
-                                                    n_samples= 1000, 
-                                                    normalize = True,
-                                                    n=100) # set n group to make sure every parameter set only have one sample 
-    print("offset, scale: ", offset, scale)
-    ssar = add_quadratic_reward_stack(np.array(ssa_samples),  cfg = cfg, w_s= 1.0) # w_s = 1.0, w_a = 0.0
-    np.save(os.path.join(folder_path, "ssar.npy"),ssar) 
+
+    # Create SSA samples
+    ssa_samples, offset, scale = create_ssa_samples(
+        params,
+        states,
+        s_target=np.array([60, 0.66]),
+        n_samples=1000,
+        normalize=True,
+        n=100
+    )
+    print("Offset, scale: ", offset, scale)
+
+    # Add quadratic reward stack
+    ssar = add_quadratic_reward_stack(np.array(ssa_samples), cfg=cfg, w_s=1.0)
+    np.save(os.path.join(folder_path, "ssar.npy"), ssar)
     np.save(os.path.join(folder_path, "offset_s.npy"), offset[0])
     np.save(os.path.join(folder_path, "offset_a.npy"), offset[1])
-    np.save(os.path.join(folder_path, "scale_s.npy"), scale[0])   
+    np.save(os.path.join(folder_path, "scale_s.npy"), scale[0])
     np.save(os.path.join(folder_path, "scale_a.npy"), scale[1])
-    
-        # exit(0)
 
+    return params, states, ssar, offset, scale
+
+
+if __name__ == "__main__":
+    folder_path = "/Users/xinyi/Documents/Data/ossur/DC_04_26"
+    cfg_path = f"{folder_path}.json"
+    params, states, ssar, offset, scale = data_loader(folder_path, cfg_path, use_save=False)
     # exit(0)
+
+    n_action = params.shape[1]
+    n_state = states[0].shape[1]
     samples = load_from_data(ssar, n_state, n_action)
 
     solver = LSTDQSolver()
