@@ -94,18 +94,20 @@ class OfflineTrainer:
         np.save(os.path.join(self.folder_path, "params.npy"), self.params)
         for i, state in enumerate(self.states):
             np.save(os.path.join(self.folder_path, f"state_{i}.npy"), state)
-        np.save("ssar.npy", self.ssar)
+        np.save(os.path.join(self.folder_path,"ssar.npy"), self.ssar)
         if self.offset and self.scale:
-            np.save("offset_s.npy", self.offset[0])
-            np.save("offset_a.npy", self.offset[1])
-            np.save("scale_s.npy", self.scale[0])
-            np.save("scale_a.npy", self.scale[1])
+            np.save(os.path.join(self.folder_path,"offset_s.npy"), self.offset[0])
+            np.save(os.path.join(self.folder_path,"offset_a.npy"), self.offset[1])
+            np.save(os.path.join(self.folder_path,"scale_s.npy"), self.scale[0])
+            np.save(os.path.join(self.folder_path,"scale_a.npy"), self.scale[1])
 
     def load_samples(self):
-        self.ssar = np.load("ssar.npy")
-        self.params = np.load("params.npy")
-        self.offset = [np.load("offset_s.npy"), np.load("offset_a.npy")]
-        self.scale = [np.load("scale_s.npy"), np.load("scale_a.npy")]
+        self.ssar = np.load(os.path.join(self.folder_path,"ssar.npy"))
+        self.params = np.load(os.path.join(self.folder_path,"params.npy"))
+        self.offset = [np.load(os.path.join(self.folder_path,"offset_s.npy")),
+                        np.load(os.path.join(self.folder_path,"offset_a.npy"))]
+        self.scale = [np.load(os.path.join(self.folder_path,"scale_s.npy")), 
+                      np.load(os.path.join(self.folder_path,"scale_a.npy"))]
         self.states = [np.load(os.path.join(self.folder_path, f"state_{i}.npy")) for i in range(len(self.params))]
         self.n_state = self.states[0].shape[1]
         self.n_action = self.params.shape[1]
@@ -146,6 +148,15 @@ class OfflineTrainer:
             pseudo_samples.append(policy_action)
         return np.array(pseudo_samples)
     
+    def check(self):    
+        # assert np.all(self.ssar == np.load("ssar.npy"))
+        assert np.all(self.params == np.load("params.npy"))
+        assert len(self.states) == len(self.params)
+        assert np.all(self.offset[0] == np.load("offset_s.npy"))
+        assert np.all(self.offset[1] == np.load("offset_a.npy"))
+        assert np.all(self.scale[0] == np.load("scale_s.npy"))
+        assert np.all(self.scale[1] == np.load("scale_a.npy"))
+
 
     def slice_action(self, slice_params):
         slice_id = slice_params > 0
@@ -156,20 +167,116 @@ class OfflineTrainer:
         self.states = [self.states[i] for i in range(len(self.states)) if mask[i]]
         self.n_state, self.n_action = self.states[0].shape[1], self.params.shape[1]
 
+
+
+def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, initial_policy=None):
+
+    # Initialize random seed
+    # np.random.seed(int(sum(100 * np.random.rand())))
+    n_action = samples[0].action.shape[0]
+    n_state = samples[0].state.shape[0]
+    # Create a new policy
+    policy = QuadraticPolicy(n_action= n_action, n_state= n_state, explore = 0.01, discount = discount)
+    if initial_policy is None:
+        initial_policy = policy.cp()
+    
+    # Initialize policy iteration
+    iteration = 0
+    distance = float('inf')
+    all_policies = [initial_policy.cp()]
+ 
+
+    # If no samples, return
+    if not samples:
+        print('Warning: Empty sample set')
+        return policy, all_policies
+    # Main LSPI loop
+    while iteration < max_iterations and distance > epsilon:
+        # Update and print the number of iterations
+        iteration += 1
+        print('*********************************************************')
+        print(f'LSPI iteration: {iteration}')
+        iteration == 1
+        # Evaluate the current policy (and implicitly improve)
+        policy = lspi.learn(samples, initial_policy.cp(), solver, epsilon=1e-2)
+        # Compute the distance between the. current and the previous policy
+        assert len(policy.weights) == len(all_policies[-1].weights), "Policy weights do not match"
+        difference = policy.weights - all_policies[-1].weights
+        lmax_norm = np.linalg.norm(difference, np.inf)
+        l2_norm = np.linalg.norm(difference)
+
+        distance = l2_norm
+
+        # Print some information
+        print(f'Norms -> Lmax: {lmax_norm:.6f}   L2: {l2_norm:.6f}')
+
+        # Store the current policy
+        all_policies.append(policy.cp())
+
+    # # Display some info
+    # print('*********************************************************')
+    # if distance > epsilon:
+    #     print(f'LSPI finished in {iteration} iterations WITHOUT CONVERGENCE to a fixed point')
+    # else:
+    #     print(f'LSPI converged in {iteration} iterations')
+    # print('*********************************************************')
+
+    return policy, all_policies
+
+   
+
+
 # Example usage:
 if __name__ == "__main__":
     folder_path = "/Users/xinyi/Documents/Data/ossur/DC_04_26"
     trainer = OfflineTrainer(folder_path)
-    # trainer.feature_extractor()
-    s_target = np.array([60, 0.66])
-    trainer.slice_action(slice_params=np.array([63, -1, 41]))
     
-    trainer.create_ssa_samples(s_target=s_target, n_samples=1000, normalize=True, n=100)
-    trainer.add_quadratic_reward_stack( w_s=0.8)
-    trainer.save_data()
-    trainer.load_samples()
+
+    use_save = False
+    if use_save:
+        # ssar = np.load("ssar.npy")
+        # n_state = (ssar.shape[1] - n_action - 1) // 2
+        trainer.params = np.load(os.path.join(folder_path, "params.npy"))
+        trainer.states = []
+        for i in range(len(trainer.params)):
+            state = np.load(os.path.join(folder_path, f"state_{i}.npy"))
+            trainer.states.append(state)
+        trainer.load_samples()
+
+    else:
+        trainer.feature_extractor()
+        
+
+        s_target = np.array([60, 0.66])
+        trainer.slice_action(slice_params=np.array([63, -1, 41]))
+        trainer.save_data()
+        trainer.create_ssa_samples(s_target=s_target, n_samples=1000, normalize=True, n=100)
+        trainer.add_quadratic_reward_stack( w_s=0.8)
+
+
+    # trainer.check()
+    
 
     # trainer.lspi_loop_offline(discount=0.8, epsilon=0.01, max_iterations=1)
     # print(convertW2S(trainer.policy.weights))
     # np.save("policy_weights.npy", trainer.policy.weights)
     # trainer.evaluate_policy(s_target)
+    solver = LSTDQSolver()
+    policy, all_policies = lspi_loop_offline(solver,trainer.samples, discount=0.8, epsilon=0.01, max_iterations=1)
+    
+    
+    # Convert weights to state-action space
+    print(convertW2S(policy.weights))
+    np.save("policy_weights.npy", policy.weights) 
+
+    # check if the policy makes sense
+    # create pseudo samples as the group mean of different param sets.
+    pseudo_samples = []
+    for i in range(len(trainer.states)):
+        state = trainer.states[i].mean(axis=0) - np.array([60, 0.66])
+        state = (state - trainer.offset[0])/trainer.scale[0]
+        policy_action = (policy.best_action(state) + trainer.offset[1]) * trainer.scale[1]
+        
+        print(f"param set {i}: {trainer.params[i]}, state: {state}, action: {policy_action}")
+    
+    pseudo_samples = np.array(pseudo_samples)

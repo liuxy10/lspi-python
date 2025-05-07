@@ -183,6 +183,12 @@ def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, in
 
 
 
+def save_parameters_and_states(folder_path, params, states):
+    np.save(os.path.join(folder_path, "params.npy"), params)
+    for i in range(len(states)):
+        state = states[i]
+        np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
+
 if __name__ == "__main__":
     folder_path = "/Users/xinyi/Documents/Data/ossur/DC_04_26"
     cfg = json.load(open(f"{folder_path}.json"))
@@ -205,14 +211,12 @@ if __name__ == "__main__":
                                         data_folder_path=folder_path,
                                         cfg= cfg
                                         )
-        
+        np.save(os.path.join(folder_path, "params.npy"), params)
+    
         n_state = states[0].shape[1]
         assert len(states) == params.shape[0], "states and params should have the same length"
         # exit(0)
-        np.save(os.path.join(folder_path, "params.npy"), params)
-        for i in range(len(states)):
-            state = states[i]
-            np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
+        
     
     
     # slice based on params:
@@ -221,10 +225,9 @@ if __name__ == "__main__":
     print("slicing params based on: ", slice_params)
     mask = np.all(params[:, slice_id] == slice_params[slice_id], axis=1)
     params = params[mask][:, ~slice_id]
-    
     states = [states[i] for i in range(len(states)) if mask[i]]
     n_state, n_action = states[0].shape[1], params.shape[1]
-
+    save_parameters_and_states(folder_path, params, states)
     # print out some stats:
     for i in range(len(states)):
         state = states[i]
@@ -243,12 +246,12 @@ if __name__ == "__main__":
                                                     n=100) # set n group to make sure every parameter set only have one sample 
     print("offset, scale: ", offset, scale)
     ssar = add_quadratic_reward_stack(np.array(ssa_samples),  cfg = cfg, w_s= 1.0) # w_s = 1.0, w_a = 0.0
-    np.save("ssar.npy",ssar) 
-    np.save("offset_s.npy", offset[0])
-    np.save("offset_a.npy", offset[1])
-    np.save("scale_s.npy", scale[0])   
-    np.save("scale_a.npy", scale[1])
-    np.save("params.npy", params)
+    np.save(os.path.join(folder_path, "ssar.npy"),ssar) 
+    np.save(os.path.join(folder_path, "offset_s.npy"), offset[0])
+    np.save(os.path.join(folder_path, "offset_a.npy"), offset[1])
+    np.save(os.path.join(folder_path, "scale_s.npy"), scale[0])   
+    np.save(os.path.join(folder_path, "scale_a.npy"), scale[1])
+    
         # exit(0)
 
     # exit(0)
