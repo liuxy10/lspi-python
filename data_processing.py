@@ -23,10 +23,6 @@ def feature_extractor(data_folder_path, cfg):
     
     params = np.array([file[:-4].split('_')for file in os.listdir(data_folder_path) if file.endswith('.csv')] , dtype=float)
 
-    mins =np.array([v["min"] for v in cfg["control_variables"]])
-    maxs = np.array([v["max"] for v in cfg["control_variables"]])
-    print(f"mins: {mins}")
-    print(f"maxs: {maxs}")
 
     states_list = []
     
@@ -44,6 +40,7 @@ def feature_extractor(data_folder_path, cfg):
                 data, sw_st_idx, st_sw_idx = extract_gait_data(f,cfg)
                 # print(sw_st_idx)
                 
+
                  # use mean +- 3* std to skip outliers, return the clean whole data with mean and std of the var
                 data_list = skip_outliers( data, sw_st_idx, cfg, "ACTUATOR_POSITION", test = False)
                 if len(data_list) == 0:
@@ -51,8 +48,10 @@ def feature_extractor(data_folder_path, cfg):
                     # pop the param from params
                     params = np.delete(params, np.where(params == param)[0][0], axis=0)
                     continue
+                
+                
 
-                plot_figure = True
+                plot_figure = False
                 if plot_figure:
                     visualize_gait_cycle(cfg, file, data_list)
                 
@@ -71,8 +70,11 @@ def feature_extractor(data_folder_path, cfg):
 def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = True, n = 4):
     """
     shuffle the states and params, and create samples"""
+    
+    
     pair_idx = np.random.randint(0, len(states), size = (n_samples, 2))
     ssa_samples= []
+    
     for i in range(n_samples):
         # print(f"pair_idx: {pair_idx[i]}")
         state = states[pair_idx[i, 0]]
@@ -91,11 +93,38 @@ def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = T
     # print(f"ssa_samples.shape: {ssa_samples.shape}")
     if normalize:
         # Normalize the samples
-        ssa_samples = (ssa_samples - np.mean(ssa_samples, axis=0)) / np.std(ssa_samples, axis=0)
-    
+        n_s = states[0].shape[1]
+        mean_s, std_s = np.mean(ssa_samples[:, :n_s], axis=0), np.std(ssa_samples[:, :n_s], axis=0)
+        mean_a, std_a = np.mean(ssa_samples[:, 2* n_s:], axis=0), np.std(ssa_samples[:, 2*n_s:], axis=0)
+        # normalize states and action respectively
+        ssa_samples[:, :n_s] = (ssa_samples[:, :n_s] - mean_s) / std_s
+        ssa_samples[:, n_s:2*n_s] = (ssa_samples[:, n_s:2*n_s] - mean_s) / std_s
+        ssa_samples[:, 2*n_s:] = (ssa_samples[:, 2*n_s:] - mean_a) / std_a
+        return ssa_samples, [mean_s, mean_a], [std_s, std_a]
 
     
-    return ssa_samples
+    return ssa_samples, [], []
+
+def add_quadratic_reward_stack(ssa_samples,  cfg, w_s = 0.8):
+    """
+    Add a quadratic reward stack to the samples.
+    The reward is calculated as:
+    reward = -1/2 * ||s - s_target||^2 * w_s - 1/2 * ||a||^2 * w_a
+    where w_s and w_a are the weights for the state and action respectively.
+    """
+    n_total = ssa_samples.shape[1]
+    n_action = len(cfg["control_variables"])
+    n_state = (n_total - n_action)//2
+    
+    # init reward stack 
+    s_err = ssa_samples[:,:n_state] 
+    assert w_s >= 0 and w_s <= 1, "w_s should be between 0 and 1"
+    w_a = np.sqrt(1 - w_s**2)
+    rew = - 1/2 * np.sum(s_err**2, axis=1) * w_s - 1/2 * np.sum(ssa_samples[:,-n_action:]**2, axis=1) * w_a
+    rew = rew.reshape(-1, 1)
+    # print(f"rew.shape", rew.shape)
+    
+    return np.concatenate([ssa_samples, rew], axis=1)
 
 
 def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, initial_policy=None):
@@ -155,46 +184,74 @@ def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, in
 
 
 if __name__ == "__main__":
-    cfg = json.load(open("/Users/xinyi/Documents/Data/ossur/DC_04_26.json"))
+    folder_path = "/Users/xinyi/Documents/Data/ossur/DC_04_26"
+    cfg = json.load(open(f"{folder_path}.json"))
     # cfg = json.load(open("udp/DC_04_26.json")) # for temp use
-    action_names = [v["name"] for v in cfg["control_variables"]]
-    n_action = len(action_names)
+    param_names = [v["name"] for v in cfg["control_variables"]]
+    # n_action = len(action_names)
     use_save = False
     if use_save:
-        ssar = np.load("ssar.npy")
-        n_state = (ssar.shape[1] - n_action - 1) // 2
+        # ssar = np.load("ssar.npy")
+        # n_state = (ssar.shape[1] - n_action - 1) // 2
+        params = np.load(os.path.join(folder_path, "params.npy"))
+        states = []
+        for i in range(len(params)):
+            state = np.load(os.path.join(folder_path, f"state_{i}.npy"))
+            states.append(state)
+
     else:
         params, states = feature_extractor(
                                         # data_folder_path= "udp/ossur/DC_04_26", 
-                                        data_folder_path="/Users/xinyi/Documents/Data/ossur/DC_04_26",
+                                        data_folder_path=folder_path,
                                         cfg= cfg
                                         )
         
         n_state = states[0].shape[1]
         assert len(states) == params.shape[0], "states and params should have the same length"
-        exit(0)
-        ssa_samples = create_ssa_samples(params, states, s_target = np.array([
-                                                        68, # max KA angle
-                                                        #  -0.0, # min KA angle
-                                                         0.64, # max KA phase var
-                                                        #  0.6 # min KA phase var
-                                                         ]), 
-                                                        n_samples= 3000, 
-                                                        normalize = True,
-                                                        n=100) # set n group to make sure every parameter set only have one sample 
-        
-        ssar = add_quadratic_reward_stack(np.array(ssa_samples), cfg = cfg, w_s= 1.0) # w_s = 1.0, w_a = 0.0
-        np.save("ssar.npy",ssar) 
         # exit(0)
-    # slice based on action values
-    # eg. column number -3: 'init_STF_ang' (0 25 50 75 100), -2: 'SWF_target_ang' ([40. 48. 57. 66. 75.]), -1:'TOA' (0-100)
-    # mins =np.array([v["min"] for v in cfg["control_variables"]])
-    # maxs = np.array([v["max"] for v in cfg["control_variables"]])
+        np.save(os.path.join(folder_path, "params.npy"), params)
+        for i in range(len(states)):
+            state = states[i]
+            np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
+    
+    
+    # slice based on params:
+    slice_params = np.array([63, -1, 41])
+    slice_id = slice_params > 0
+    print("slicing params based on: ", slice_params)
+    mask = np.all(params[:, slice_id] == slice_params[slice_id], axis=1)
+    params = params[mask][:, ~slice_id]
+    
+    states = [states[i] for i in range(len(states)) if mask[i]]
+    n_state, n_action = states[0].shape[1], params.shape[1]
 
+    # print out some stats:
+    for i in range(len(states)):
+        state = states[i]
+        print(f"param set {i}: {params[i]} with {state.shape[0]} samples")
+        print(f"state avg, std: {state.mean(axis=0)}, {state.std(axis=0)}")
+        print("*" * 20)
+    
+    ssa_samples, offset, scale = create_ssa_samples(params, states, s_target = np.array([
+                                                    60, # max KA angle
+                                                    #  -0.0, # min KA angle
+                                                        0.66, # max KA phase var
+                                                    #  0.6 # min KA phase var
+                                                        ]), 
+                                                    n_samples= 1000, 
+                                                    normalize = True,
+                                                    n=100) # set n group to make sure every parameter set only have one sample 
+    print("offset, scale: ", offset, scale)
+    ssar = add_quadratic_reward_stack(np.array(ssa_samples),  cfg = cfg, w_s= 1.0) # w_s = 1.0, w_a = 0.0
+    np.save("ssar.npy",ssar) 
+    np.save("offset_s.npy", offset[0])
+    np.save("offset_a.npy", offset[1])
+    np.save("scale_s.npy", scale[0])   
+    np.save("scale_a.npy", scale[1])
+    np.save("params.npy", params)
+        # exit(0)
 
-    # slice = (ssar[:, -n_action] == 50) * (ssar [:, -n_action + 1] == 57)
-    # ssar = ssar[slice, :-2]
-    # # exit(0)
+    # exit(0)
     samples = load_from_data(ssar, n_state, n_action)
 
     solver = LSTDQSolver()
@@ -204,6 +261,21 @@ if __name__ == "__main__":
     # Convert weights to state-action space
     print(convertW2S(policy.weights))
     np.save("policy_weights.npy", policy.weights) 
+
+    # check if the policy makes sense
+    # create pseudo samples as the group mean of different param sets.
+    pseudo_samples = []
+    for i in range(len(states)):
+        state = states[i].mean(axis=0) - np.array([60, 0.66])
+        state = (state - offset[0])/scale[0]
+        policy_action = (policy.best_action(state) + offset[1]) * scale[1]
+        
+        print(f"param set {i}: {params[i]}, state: {state}, action: {policy_action}")
+    
+    pseudo_samples = np.array(pseudo_samples)
+
+    
+
 
 
     

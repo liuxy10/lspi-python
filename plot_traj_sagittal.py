@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import sin, cos, radians
 
-def plot_leg_sagittal_plane(knee_angles, shank_angles, st_ratio, thigh_length=0.4, shank_length=0.4, skip_rate= 1):
+def plot_leg_sagittal_plane(knee_angles_, shank_angles_, st_ratio, thigh_length=0.4, shank_length=0.4, skip_rate= 1):
     """
     Plot leg positions in the sagittal plane with fixed ankle.
     
@@ -33,8 +33,8 @@ def plot_leg_sagittal_plane(knee_angles, shank_angles, st_ratio, thigh_length=0.
     """
     # Ensure inputs are numpy arrays
     # num_pts = len(knee_angles) // skip_rate
-    knee_angles = np.array(knee_angles)[::skip_rate] 
-    shank_angles = -np.array(shank_angles)[::skip_rate]
+    knee_angles = np.array(knee_angles_)[::skip_rate] 
+    shank_angles = -np.array(shank_angles_)[::skip_rate]
     
     # Number of frames
     frames = len(knee_angles)

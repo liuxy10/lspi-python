@@ -42,8 +42,8 @@ class QuadraticPolicy(Policy):
     def calc_q_value(self, state, action):
         # if action.shape[0] < 0 or action >= self.n_action:
         #     raise IndexError('action must be in range [0, num_actions)')
-        Huu, Hf = self.extract_qp_parameters(state)
-        q = - 0.5 * action[None,:] @ Huu @ action[:,None] - Hf @ action[:,None]
+        self.Huu, self.Hf = self.extract_qp_parameters(state)
+        q = - 0.5 * action[None,:] @ self.Huu @ action[:,None] - self.Hf @ action[:,None]
 
         return q # self.weights.dot(self.basis.evaluate(state, action))
 
@@ -58,7 +58,7 @@ class QuadraticPolicy(Policy):
         return self.best_action(state)
 
     def best_action(self, state):
-        Huu, Hf = self.extract_qp_parameters(state) 
+        self.Huu, self.Hf = self.extract_qp_parameters(state) 
 
 
         # A = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])  # Action bounds
@@ -72,7 +72,7 @@ class QuadraticPolicy(Policy):
         
         # Solve constrained optimization
         res = minimize(
-            fun=lambda a: 0.5 * a[None,:] @ Huu @ a[:,None] + Hf @ a[:,None], 
+            fun=lambda a: 0.5 * a[None,:] @ self.Huu @ a[:,None] + self.Hf @ a[:,None], 
             x0=np.zeros((self.n_action,)),
             bounds=[(-1, 1)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
             # constraints={'type': 'ineq', 'fun': lambda a: A @ a - Ax}

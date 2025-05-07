@@ -25,7 +25,10 @@ def learn(data, initial_policy, solver, epsilon=10**-5, max_iterations=100):
         # print(f"data, current_policy, solver: {data}, {curr_policy}, {solver}")
         new_weights = solver.solve(data, curr_policy)
         distance = np.linalg.norm(new_weights - curr_policy.weights)
-        print(f"i={iteration} Distance: {distance}")
+        try:
+            print(f"i={iteration} Distance: {distance}, Hf, Huu: {curr_policy.Hf}, {curr_policy.Huu}")
+        except:
+            print(f"i={iteration} Distance: {distance}")
         curr_policy.weights = new_weights.copy()
         
 

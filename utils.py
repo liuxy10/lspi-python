@@ -21,6 +21,7 @@ def visualize_gait_cycle(cfg, file, data_list):
     plot_data(file, cfg, data_list,[f"LINEAR_ACC_{i}_LOCAL" for i in ["X","Y","Z"]], ylim=[-30, 30], mark_max_min=False)
     plot_data(file, cfg, data_list,[f"GRAVITY_VECTOR_{i}" for i in ["X","Y","Z"]], ylim=[-10, 20], mark_max_min=False)
     plot_data(file, cfg, data_list, ["ACTUATOR_SETPOINT","TORQUE_ESTIMATE"], ylim=[-110, 110] )
+    plot_data(file, cfg, data_list, ["HIP_VELOCITY", "KNEE_VELOCITY"], ylim=[-60, 60])
 
 def plot_data(file, cfg, data_list, names, ylim, 
               plot_mean_std = True, 
@@ -30,7 +31,7 @@ def plot_data(file, cfg, data_list, names, ylim,
     
     for name in names:
         for i in range(len(data_list)):    
-            plt.scatter(np.arange(0,1,0.01), data_list[i][name], s=1.5, c="grey")#, label=f"gait cycle {i+1}", alpha=0.2)
+            plt.plot(np.arange(0,1,0.01), data_list[i][name], linewidth = .7) #color = "grey")# s=1.5, c="grey")#, label=f"gait cycle {i+1}", alpha=0.2)
         
         # if mark_max_min_individual:
         #     for i in range(len(data_list)):
@@ -42,20 +43,22 @@ def plot_data(file, cfg, data_list, names, ylim,
         if plot_mean_std:
             mean = np.mean(np.array([data[name] for data in data_list]), axis=0)
             std = np.std(np.array([data[name] for data in data_list]), axis=0)
-            plt.plot(np.arange(0,1,0.01), mean, label=f"mean {name.lower()}")
-            plt.fill_between(np.arange(0,1,0.01), mean-3*std, mean+3*std, alpha=0.2)
+            plt.plot(np.arange(0,1,0.01), mean, label=f"mean {name.lower()}", color = "black", linewidth = 2)
+            plt.fill_between(np.arange(0,1,0.01), mean-3*std, mean+3*std, alpha=0.2, color= "black")
             # mean_phase_change =  mean_st_sw_phase(data_list, loadcell_threshold = cfg["loadcell_threshold"])
-            mean_phase_change = np.mean([np.where(data["GAIT_PHASE"])[0][0] for data in data_list])
+            # mean_phase_change = np.mean([np.where(data["GAIT_PHASE"])[0][0] for data in data_list])
+            mean_phase_change = np.min([np.where(data["GAIT_SUBPHASE"]> 0)[0][0] for data in data_list])
             plt.axvline(mean_phase_change / 100, color='green', linestyle='--')
             plt.text(mean_phase_change / 100, ylim[1] - 0.05 * (ylim[1] - ylim[0]), 
                      f"{mean_phase_change/100:.2f}", fontsize=10, color="green")
-            if not mark_max_min:
+            if mark_max_min:
                 
-                min_idx_before = np.argmin(mean[:int(mean_phase_change)])
-                max_idx_before = np.argmax(mean[:int(mean_phase_change)]) # restrict max to happened before min
-                max_idx_after = np.argmax(mean[int(mean_phase_change):]) + int(mean_phase_change)
-                min_idx_after = np.argmin(mean[int(mean_phase_change):]) + int(mean_phase_change)
+                min_idx_before = np.nanargmin(mean[:int(mean_phase_change)])
+                max_idx_before = np.nanargmax(mean[:int(mean_phase_change)]) # restrict max to happened before min
+                max_idx_after = np.nanargmax(mean[int(mean_phase_change):]) + int(mean_phase_change)
+                min_idx_after = np.nanargmin(mean[int(mean_phase_change):]) + int(mean_phase_change)
 
+                
                 plt.scatter(max_idx_before/100, mean[max_idx_before], s=15, c="black", marker="o")
                 plt.scatter(min_idx_before/100, mean[min_idx_before], s=15, c="black", marker="x")
                 plt.text(max_idx_before/100, mean[max_idx_before] + 0.05 * (ylim[1] - ylim[0]), 
@@ -69,7 +72,7 @@ def plot_data(file, cfg, data_list, names, ylim,
                          f"max: {mean[max_idx_after]:.2f} at {max_idx_after/100:.2f}", fontsize=10, color="black")
                 plt.text(min_idx_after/100, mean[min_idx_after] - 0.05 * (ylim[1] - ylim[0]), 
                          f"min: {mean[min_idx_after]:.2f} at {min_idx_after/100:.2f}", fontsize=10, color="black")
-        
+                
     plt.ylim(ylim[0], ylim[1])
     plt.legend()
     plt.grid()
@@ -106,7 +109,11 @@ def skip_outliers(data, sw_st_idx, cfg, variable_name, test = False):
         interpolated_data = interpolated_data.interpolate(method='linear', limit_direction='both')
         # interpolate the data to 100 points
         interpolated_data = interpolated_data.iloc[np.linspace(0, len(interpolated_data)-1, 100).astype(int)]
-        
+        # add hip velocity and shank velocity in the interpolated data
+        interpolated_data["HIP_ANGLE"] = interpolated_data["ACTUATOR_POSITION"] - interpolated_data["SHANK_ANGLE"]
+        interpolated_data["HIP_VELOCITY"] = np.gradient(interpolated_data["HIP_ANGLE"].rolling(window=5, center=True).mean(), 0.1) # Smooth data with rolling mean
+        interpolated_data["SHANK_VELOCITY"] = np.gradient(interpolated_data["SHANK_ANGLE"].rolling(window=5, center=True).mean(), 0.1)
+        interpolated_data["KNEE_VELOCITY"] = np.gradient(interpolated_data["ACTUATOR_POSITION"].rolling(window=5, center=True).mean(), 0.1)
         # # skip the gait cycles that stance and swing are inproportional
         if np.sum(interpolated_data["GAIT_PHASE"]) >  70 or np.sum(interpolated_data["GAIT_PHASE"]) < 30:
             print(f"skip gait cycle {i} because of inproportional phase")
@@ -156,6 +163,10 @@ def extract_gait_data(f,cfg, filter_kernel_size = 5):
     
     filtered_loadcell = raw_data["LOADCELL"] #np.convolve(raw_data["LOADCELL"].values, np.ones(filter_kernel_size)/filter_kernel_size, mode='same')
     raw_data["LOADCELL"] = filtered_loadcell
+
+    if "GAIT_PHASE" not in raw_data.columns:
+        print(f"no gait phase for {f}, infering from subphase")
+        raw_data["GAIT_PHASE"] = raw_data["GAIT_SUBPHASE"] > 2.
     # infer the stance or swing phase by loadcell data:
     # phase = np.where(filtered_loadcell >= cfg["loadcell_threshold"], 1, 0)
     phase = 1 - raw_data["GAIT_PHASE"].values
@@ -175,36 +186,15 @@ def extract_gait_data(f,cfg, filter_kernel_size = 5):
     st_sw_idx = st_sw_idx[st_sw_idx > sw_st_idx[0]] - sw_st_idx[0]
     return data,sw_st_idx, st_sw_idx
 
-        
-def add_quadratic_reward_stack(ssa_samples, cfg, w_s = 0.8):
-    """
-    Add a quadratic reward stack to the samples.
-    The reward is calculated as:
-    reward = -1/2 * ||s - s_target||^2 * w_s - 1/2 * ||a||^2 * w_a
-    where w_s and w_a are the weights for the state and action respectively.
-    """
-    n_total = ssa_samples.shape[1]
-    n_action = len(cfg["control_variables"])
-    n_state = (n_total - n_action)//2
-    
-    # init reward stack 
-    s_err = ssa_samples[:,:n_state] 
-    assert w_s >= 0 and w_s <= 1, "w_s should be between 0 and 1"
-    w_a = np.sqrt(1 - w_s**2)
-    rew = - 1/2 * np.sum(s_err**2, axis=1) * w_s - 1/2 * np.sum(ssa_samples[:,-n_action:]**2, axis=1) * w_a
-    rew = rew.reshape(-1, 1)
-    # print(f"rew.shape", rew.shape)
-    
-    return np.concatenate([ssa_samples, rew], axis=1)
 
 def load_from_data(ssar, n_state = 4, n_action = 3):
     samples = []
     assert n_state *2 + n_action + 1 == ssar.shape[1], "ssar should have shape (n_samples, n_state*2 + n_action + 1)"
     for i in range(len(ssar)):
-        state = ssar[i][:n_state]
-        next_state = ssar[i][n_state:n_state*2]
-        action = ssar[i][n_state*2:-1]
-        reward = ssar[i][-1]
+        state = ssar[i][:n_state].copy()
+        next_state = ssar[i][n_state:n_state*2].copy()
+        action = ssar[i][n_state*2:-1].copy()
+        reward = ssar[i][-1].copy()
         done = False
         samples.append(Sample(state, action, reward, next_state, done))
     return samples
