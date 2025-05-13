@@ -24,11 +24,7 @@ class QuadraticPolicy(Policy):
         
         super().__init__(self.basis, discount, explore, weights)
         
-        # self.weights = np.zeros(self.n_basis)
-        self.first_stiff_timing = 0.0
-        self.second_stiff_timing = 0.0
-        self.rl_number = rl_number
-        # self.num_actions = self.n_action
+
         
     def cp(self):
         """Return a copy of this class with a deep copy of the weights."""
