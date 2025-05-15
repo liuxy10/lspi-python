@@ -33,7 +33,7 @@ classdef LQR_PolicyIteration
         outputLimit;
         mode;    % 0 enable sample adding mode, 1 diable sample adding mode
 %         firstTime;
-        k;
+        k; % iteration number
         successflag; %  4 phase convergence flag: 1 for success
         convergence; %  convergence flag for each phase
         lockPhase;

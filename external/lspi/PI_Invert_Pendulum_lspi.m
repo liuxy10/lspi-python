@@ -19,7 +19,7 @@ normalState=[pi/2;2*pi]; % this need to be defined for every different system
 
 basis = 'basis_quadratic';
 discount = 0.9;
-policy = pendulum_initialize_policy(0, discount, basis);
+policy = pendulum_initialize_policy(0.1, discount, basis);
 
 % S=0.3*ones(3,3);  
 %rng(5);
@@ -30,7 +30,7 @@ policy = pendulum_initialize_policy(0, discount, basis);
 % Sxu=S(1:2,3);
 [nextState, reward] = model.getState()
 
-%%
+%% initialize policy
 active=1;
 updateflag=1;
 epsilon_zero=0.5;
@@ -84,7 +84,7 @@ for k=1:100 % for each policy update iteration
             break;
         end
     end
-    k=1+k;  
+    % k=1+k;  
     
     close all;
     % model.showHist;
@@ -127,51 +127,6 @@ plotPolicy(policy);
 
 
 
-
-
-%% check fitting error
-
-range=find(resetHist==1);
-sIdx=1;
-% eIdx=range(end);
-eIdx=size(nextStateHist,2);
-S=blocks{1, 1}.SHist(:,end-5:end-3) % stack of 3*3 matrix 
-sa=[blocks{1, 1}.stateHist(:,sIdx:eIdx);blocks{1, 1}.actionTakeHist(:,sIdx:eIdx)]; % state-action stack from the corresponding policy
-parfor i=1:size(blocks{1, 1}.nextStateHist(:,sIdx:eIdx),2) % create the action list from the final policy
-            f=2*blocks{1, 1}.nextStateHist(:,i)'*Sxu; % create the cost
-            pi_action(:,i)=quadprog(Suu,f',[],[],[],[],-1,1, optimset(options, 'Display', 'off'));                
-end
-spa=[blocks{1, 1}.nextStateHist(:,sIdx:eIdx);pi_action]; % state-action stack from the final policy
-Qs=diag(sa'*S*sa); % Q-value from the training data
-Qsp=diag(spa'*S*spa); % Q-value from the final policy
-figure;
-plot(Qs,blocks{1, 1}.costHist(:,sIdx:eIdx)'+gamma*Qsp,'*'); % plot the cost
-hold on;
-% plot(0:max([max(Qs),max(blocks{1, 1}.costHist(:,sIdx:eIdx)'+gamma*Qsp)]), 0:max([max(Qs),max(blocks{1, 1}.costHist(:,sIdx:eIdx)'+gamma*Qsp)]));
-% xlim([0 max([max(Qs),max(blocks{1, 1}.costHist(:,sIdx:eIdx)'+gamma*Qsp)])]);
-% ylim([0 max([max(Qs),max(blocks{1, 1}.costHist(:,sIdx:eIdx)'+gamma*Qsp)])]);
-axis square;
-%%
-close all;
-xi=[0.4;-0.4];
-model=model.reset([0;0], xi);
-model.unoise=10;
-[nextState, reward] = getState(model);
-active=0;
-hist=[];
-%epsilon_k=comm.internal.BernoulliBinaryGenerator('ProbabilityOfZero', 0, 'SamplesPerFrame', 1);
-for n=1:1000
-        state=nextState;
-%         if abs(nextState(1))>pi/2
-%             break;
-%         end
-        normState=state'./normalState;
-        action=getAction(normState,1,0);
-        [model,actionTake]=model.simulate(action);
-        [nextState, reward] = model.getState();
-        hist=[hist,state'];
-end
-model.showHist; 
 
 %%
 % data=[stateHist(:,sIdx:eIdx);actionTakeHist(:,sIdx:eIdx)];

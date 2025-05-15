@@ -3,7 +3,7 @@ function [w, A, b] = lsqfast(samples, policy, new_policy, firsttime)
   persistent Phihat
   persistent Rhat
   %%% Initialize variables
-  howmany = length(samples) 
+  howmany = length(samples);
   k = feval(new_policy.basis); % 
   A = zeros(k, k);
   b = zeros(k, 1);

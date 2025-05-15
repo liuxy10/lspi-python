@@ -9,23 +9,17 @@
 
 function [action, actionphi] = policy_function(policy, state)
   %%% Exploration or not?
-  % global var_1; % Global variable for the first stiffness timing.
-  % global var_2; % Global variable for the second stiffness timing.
-  % global RL_number; % Global variable for reinforcement learning iteration count.
-
-  % y1 = var_1;
-  % y2 = var_2;
+% Exploitation: Use the policy weights to compute the optimal action.
+  nS =2; % Number of state variables.
+  nSA = nS + policy.actions; % Number of state and action variables.
 
   % Decide whether to explore or exploit based on the exploration rate.
-  % if (rand < policy.explore)
-  %   % Exploration: Pick a random action.
-  %   sample_action_LE = sort(2 * rand(1, 2) - 1); % Generate two random values in [-1, 1].
-  %   action(1) = sample_action_LE(1) * 0.12; % Normalize the first action.
-  %   action(2) = sample_action_LE(2) * 0.12; % Normalize the second action.
-  % else
-    % Exploitation: Use the policy weights to compute the optimal action.
-    nS =2; % Number of state variables.
-    nSA = nS + policy.actions; % Number of state and action variables.
+  if (rand < policy.explore)
+    sample_action_LE = sort(2 * rand(1, policy.actions) - 1); % Generate two random values in [-1, 1].
+    action = sample_action_LE * 0.12;
+    actionphi = feval(policy.basis, state, action, nSA);
+  else
+    
     
     % Convert policy weights into a structured form.
     HW = convertWS(policy.weights);
