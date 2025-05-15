@@ -143,25 +143,7 @@ classdef Inverted_Pendulum
         % status - 1 for succeed, -1 for failure, 0 for normal range
         function  [r]= reward(md,error)
             r = 0;
-%             if abs(error) >= md.sminus;
-%                 r = md.costfailure;
-%                 status = -1;
-%             else         
-%                 if md.rewardtype                    % 1 for smooth reward
-%                     r = md.costconstant*(tanh(abs(error)*md.w))^2;
-%                     if r < md.costconstant;
-%                        status = 1;
-%                     end
-%                 else                                % 0 for discrete reward
-%                     if abs(error) < md.splus
-%                         r = md.costsucceed;
-%                         status = 1;
-%                     else
-%                         r = md.costconstant;
-%                     end
-%                 end
-%             end
-              r=error'*error;
+              r= error'*error;
         end
         
         %% show history of the state and control
@@ -196,6 +178,7 @@ classdef Inverted_Pendulum
                md.xhist = [];
                md.histcnt = 0;
             end
+            uiwait(gcf); % Wait for the figure to close before proceeding
         end
         
         %% get control list of the platform

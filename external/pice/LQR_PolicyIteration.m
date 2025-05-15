@@ -1,4 +1,4 @@
-classdef LQR_PolicyIteration_copy
+classdef LQR_PolicyIteration
    
 %%    
     properties
@@ -49,7 +49,7 @@ classdef LQR_PolicyIteration_copy
 %%    
     methods
         %% Class constructor
-        function obj=LQR_PolicyIteration_copy(nState,nAction,blockNum)
+        function obj=LQR_PolicyIteration(nState,nAction,blockNum)
             
             if nargin~=3
                 fprintf('illegal input argument number to define a LQR_PolicyIteration variable\n ');
@@ -628,7 +628,7 @@ classdef LQR_PolicyIteration_copy
 %                 decayNum=size(pi.blocks{index}.stateHist,2)-sub;
                 decayNum=size(pi.blocks{index}.stateHist,2)-find(pi.blocks{index}.updateflag,1,'last');
                 pi.epsilon_k=pi.epsilon_zero*pi.epsilon_d^(decayNum);
-                epsilon=binornd(1,pi.epsilon_k);
+                epsilon=binornd(1,pi.epsilon_k); 
                 if epsilon==1
                     action =quadprog(H,f,[],[],[],[],-b,b,[],options);
                     actionTake=1*(rand(size(pi.nAction))-0.5).*b;

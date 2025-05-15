@@ -9,7 +9,7 @@ xi=[0.4;0.2];
 model=model.reset([0;0], xi);
 model.rewardtype=1;
 model.xnorm=[pi/2;2*pi];
-mPI=LQR_PolicyIteration_copy(2,1,1);
+mPI=LQR_PolicyIteration(2,1,1);
 mPI.actionbound=1;
 mPI.normalAction=1;
 mPI.normalState=[pi/2;2*pi]; % this need to be defined for every different system
@@ -39,15 +39,20 @@ for k=1:100 % for each policy update iteration
         state=nextState;
         normState=state'./mPI.normalState;
               
-        [actionP,actionT]=mPI.getAction(normState,1,0); 
+        [actionP,actionT]=mPI.getAction(normState,1,0);
         [model,actionTake]=model.simulate(actionT); 
         [nextState, reward] = model.getState();
         normNextState=nextState'./mPI.normalState; % normalize the state 
         if abs(nextState(1))<pi/2 
+            fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
+                i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
             mPI=mPI.addSample(normState, normNextState,actionT,actionP,[0;0],0,1); 
             mPI.blocks{1}.updateflag=[mPI.blocks{1}.updateflag,0]; 
         else
             mPI=mPI.addSample(normState, normNextState,actionT,actionP,[0;0],1,1);
+            fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
+                i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
+            
             mPI.blocks{1}.updateflag=[mPI.blocks{1}.updateflag,1];
             failure=1;
             break;
@@ -58,7 +63,7 @@ for k=1:100 % for each policy update iteration
     end
     
     close all;
-    model.showHist;
+    % model.showHist;
     
     if failure  % if failure, update the start and end index of the training data   
 %      if k<30
@@ -72,7 +77,9 @@ for k=1:100 % for each policy update iteration
         end
        End=size(mPI.blocks{1}.nextStateHist,2)-1;
        [mPI,~]=cvxW(mPI,Start,End,1); 
-       
+        % plotValue(mPI,0);
+        % plotPolicy(mPI);
+        hold on;
        failure=0;
     else
          break; 
@@ -82,6 +89,10 @@ for k=1:100 % for each policy update iteration
      model=model.reset([0;0], xi);    
     [nextState, reward] = getState(model);
 end
+
+model.showHist;
+plotValue(mPI,0);
+plotPolicy(mPI);
 
 %% check fitting error
 
@@ -161,6 +172,8 @@ figure;
     zlabel('action')
     view(3);
     axis square;
+
+    uiwait(gcf); % Wait for the figure to close before proceeding   
 end
 function []=plotValue(mPI,offset)
 figure;
@@ -169,7 +182,7 @@ S=mPI.blocks{1}.SHist(:,end-offset*3-2:end-offset*3);
         for i=1:size(X,1)        
             for j=1:size(Y,1)            
                 normState=[X(i,j);Y(i,j)];
-                Z(i,j)=mPI.getAction(normState,1,0);
+                Z(i,j)=mPI.getAction(normState,1,0); % Z is the action
                 Q(i,j)=[normState;Z(i,j)]'*S*[normState;Z(i,j)];  
                 Z0(i,j)=0;
                 Q0(i,j)=[normState;Z0(i,j)]'*S*[normState;Z0(i,j)];
@@ -178,14 +191,15 @@ S=mPI.blocks{1}.SHist(:,end-offset*3-2:end-offset*3);
         colormap(parula);
         %surf(X,Y,Q0,'FaceAlpha',0.5);
         hold on;
-        surf(X,Y,Q);
+        surf(X,Y,Q0);
         colorbar;
         xlabel('Angle')
         ylabel('Velocity')
         zlabel('Qvalue')
         view(3);
         axis square;        
-
+       
+        uiwait(gcf); % Wait for the figure to close before proceeding
     
     
 

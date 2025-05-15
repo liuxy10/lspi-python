@@ -2,7 +2,7 @@ import numpy as np
 import os
 
 from lspi.train_offline import lspi_loop_offline
-from lspi.solvers import LSTDQSolver
+from lspi.solvers import LSTDQSolver, PICESolver
 
 
 import numpy as np
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     n_state = states[0].shape[1]
     samples = load_from_data(ssar, n_state, n_action)
 
-    solver = LSTDQSolver()
+    solver = PICESolver()#LSTDQSolver()
     policy, all_policies = lspi_loop_offline(solver, samples, discount=0.8, epsilon=0.01, max_iterations=1)
     
     

@@ -143,7 +143,7 @@ class PICESolver(LSTDQSolver):
         
         j=1
         error=1
-        stepsize=0.5
+        stepsize=0.5 * 0.5
         phiw=np.zeros((k,1))
         Cphi=a_mat/len(data)
         dphi=b_vec/len(data)
@@ -153,7 +153,6 @@ class PICESolver(LSTDQSolver):
             phiw=proDysktra(residuePhi,100,1e-4)
             j=j+1
             error=np.linalg.norm(oPhiw-phiw)
-            print(f"j: {j}, error: {error}")
             stepsize=1/(j+1)
         
         w=phiw
@@ -183,8 +182,8 @@ def proDysktra(x0,ballR,errTol):
         oldX=x
         s=convertW2S(x-I[:,1])
         D, V = eig(s)  # D is diagonal matrix, V is orthogonal
-        D[D<0]=0    # set negative eigenvalues to zero                          
-        s=V*D*V.T
+        D[D>0]=0    # set negative eigenvalues to zero                          
+        s=V@np.diag(D)@V.T
         x=convertS2W(s) # x is the new point
         oldI[:,1]=I[:,1]
         I[:,1]=x-(oldX-I[:,1])  

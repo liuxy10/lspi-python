@@ -14,13 +14,13 @@ timing_value = [];
 %declaring global variables
 global stiffness;
 global RL_number;
-global first_stiff_timing;
-global second_stiff_timing;
+global var_1;
+global var_2;
 
 % setting initial values
 stiffness=25;
-first_stiff_timing=0.15;
-second_stiff_timing=0.6;
+var_1=0.15;
+var_2=0.6;
 
 load('init_state.mat');
 load('std_state.mat');
@@ -38,16 +38,18 @@ stop_RL_reward=0.05;
 %stop_RL_state=0.1;
 status_word=4663; % motor_status
 RL_convergence_buffer=0;
+
+
 % Setting Up UCL connection
-uc1= udp('127.0.0.1',100,'LocalPort',6789);
-uc1.InputBufferSize=9600;
-uc1.OutputBufferSize=4800;
-uc1.EnablePortSharing='on';
-% uc1.ByteOrder='littleEndian';
-% uc1.LocalHost='192.168.38.55';
-uc1.Timeout=10;
-fclose(uc1);
-fopen(uc1);
+% uc1= udp('127.0.0.1',100,'LocalPort',6789);
+% uc1.InputBufferSize=9600;
+% uc1.OutputBufferSize=4800;
+% uc1.EnablePortSharing='on';
+% % uc1.ByteOrder='littleEndian';
+% % uc1.LocalHost='192.168.38.55';
+% uc1.Timeout=10;
+% fclose(uc1);
+% fopen(uc1);
 
 
 %%% Initialize storage for new samples
@@ -58,7 +60,7 @@ empty_result.nextstate = empty_result.state;
 empty_result.absorb = 0;
 
 stop_RL_count=0; % iterations for which RL penalty is within threshold
-stop_RL_count_enable=1;
+stop_RL_count_enable=1; % flag for RL
 RL_enable=1;% RL work flag
 reset_count=0;
 total_gait_count=0;
@@ -88,20 +90,23 @@ time_count_start=0;
 time_second = 0; %time in counts
 time_before_start=10;
 initial_data_count=1;
-fwrite(uc1,[0.001,0,0,first_stiff_timing,second_stiff_timing],'single');
-while(time_before_start>0)
-    rawdata=fread(uc1,24,'single');
-    time_count_start=time_count_start+1;
-    if(mod(time_count_start,500)==0) %500 Hz, so recording data
-        time_before_start=time_before_start-1;
-        disp(['Algorithm starts in:' num2str(time_before_start)]);
-    end
-    initial_data(:,initial_data_count)=rawdata;
-    initial_data_count=initial_data_count+1;
-end
 
-fwrite(uc1,[0.001,initial_state(1),initial_state(2),first_stiff_timing,second_stiff_timing],'single');
-%%
+% fwrite(uc1,[0.001,0,0,var_1,var_2],'single'); % write initial data to the controller
+
+% %% collecting initial data
+% while(time_before_start>0)
+%     rawdata=fread(uc1,24,'single');
+%     time_count_start=time_count_start+1;
+%     if(mod(time_count_start,500)==0) %500 Hz, so recording data
+%         time_before_start=time_before_start-1;
+%         disp(['Algorithm starts in:' num2str(time_before_start)]);
+%     end
+%     initial_data(:,initial_data_count)=rawdata;
+%     initial_data_count=initial_data_count+1;
+% end
+
+% fwrite(uc1,[0.001,initial_state(1),initial_state(2),var_1,var_2],'single');
+% %%
 
 gait_cycle_count=1;
 prev_gait_number=0;
@@ -110,6 +115,8 @@ gait_counts=1;
 RL_iterations=1;
 current_sample_number=1;
 gait_data_count=0;
+
+
 while(RL_iterations<=RL_run_times && stop_RL_count<stable_times)
     if(RL_end==1 && stop_RL_count<stable_times)
         RL_end=0;
@@ -117,13 +124,13 @@ while(RL_iterations<=RL_run_times && stop_RL_count<stable_times)
     RL_number=RL_iterations;
     while(current_sample_number<=samples_per_iteration && stop_RL_count<stable_times)
         sample_action= policy_function(policy,state)
-        first_stiff_timing=first_stiff_timing+sample_action(1);
-        second_stiff_timing=second_stiff_timing+sample_action(2);
+        var_1=var_1+sample_action(1);
+        var_2=var_2+sample_action(2);
         
-        current_time=[first_stiff_timing,second_stiff_timing]
-        timing_value=[timing_value;first_stiff_timing,second_stiff_timing];
+        current_time=[var_1,var_2]
+        timing_value=[timing_value;var_1,var_2];
         sample_action_history=[sample_action_history;sample_action'];
-        fwrite(uc1,[stiffness,1.5*initial_state(1),1.5*initial_state(2),first_stiff_timing,second_stiff_timing],'single');
+        % fwrite(uc1,[stiffness,1.5*initial_state(1),1.5*initial_state(2),var_1,var_2],'single');
         prev_gait_number=rawdata(11);
         while(rawdata(11)==prev_gait_number)
             rawdata=fread(uc1,24,'single');
@@ -136,7 +143,7 @@ while(RL_iterations<=RL_run_times && stop_RL_count<stable_times)
                 disp(['Algorithm_running time:' num2str(time_second)]);
                 time_second=time_second+1;
             end
-            rawdata=fread(uc1,24,'single');
+            % rawdata=fread(uc1,24,'single');
             gait_data_count=gait_data_count+1;
             training_data(:,gait_data_count)=rawdata;
             if(rawdata(11)~=prev_gait_number)

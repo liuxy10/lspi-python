@@ -3,31 +3,11 @@ import numpy as np
 # from tkinter import ttk
 import matplotlib.pyplot as plt
 
-class InvertedPendulumGUI:
-    def __init__(self, root, length=1.0, mass=1.0, gravity=9.81, dt=0.01, force_max=10.0):
-        self.length = length
-        self.mass = mass
-        self.gravity = gravity
-        self.dt = dt
-        self.force_max = force_max
-        self.randomize_state()
-        
-
-    def randomize_state(self):
-        """Randomize the initial state of the pendulum"""
-        self.state = np.random.uniform(-np.pi/3, np.pi/3, size=(2,))
-    def dynamics(self, s, a):
-        angle, ang_vel = s
-        force = np.clip(a, -self.force_max, self.force_max)
-        ang_acc = (self.gravity/self.length)*np.sin(angle) + force/(self.mass*self.length**2)
-        return ang_acc  # Remove [1][0] indexing
-
-
-    def reset(self):
-        self.running = False
-        self.state = np.array([0.0, 0.0])  # Reset to upright position
-        # self.draw_pendulum()
-
+import os
+import sys
+# Ensure the current directory is in the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from Inverted_Pendulum import InvertedPendulum
 
 
 def generate_ssar(n_samples=100, n_step_per_episodes = 100, dt=0.01, policy = None, vis = False,
@@ -42,13 +22,14 @@ def generate_ssar(n_samples=100, n_step_per_episodes = 100, dt=0.01, policy = No
     actions = []
     rewards = []
     next_states = []
+    reset_flag = []
     
-    pendulum = InvertedPendulumGUI(None, length, mass, gravity, dt, force_max)
+    pendulum = InvertedPendulum(None, length, mass, gravity, dt, force_max)
     
 
     for _ in range(int(n_samples)):
-        pendulum.randomize_state()
-        for _ in range(n_step_per_episodes):
+        pendulum.randomize_state(max_angle=0.5)
+        for i in range(n_step_per_episodes):
             if policy is None:
                 action = np.inner(np.array([-.5, -.3]), np.sign(pendulum.state)) * mass * gravity# Random action
             else:
@@ -65,18 +46,32 @@ def generate_ssar(n_samples=100, n_step_per_episodes = 100, dt=0.01, policy = No
             
             states.append(pendulum.state.copy())
             actions.append(action)
-            rewards.append(-pendulum.state[0]**2 - pendulum.state[1]**2 - action**2)  # Placeholder for reward
+            rewards.append(-pendulum.state[0]**2 - 0.1 * pendulum.state[1]**2) # action**2)  # Placeholder for reward
             next_states.append(pendulum.state.copy())
+
+            # done
+            if pendulum.state[0] > np.pi/2 or pendulum.state[0] < -np.pi/2 or i == n_step_per_episodes - 1:
+                reset_flag.append(1)
+                # print("Resetting the pendulum")
+                break
+            else:
+                reset_flag.append(0)
+            # Update the GU
+            
 
     if vis:
         #  visualize the states
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.plot(np.arange(0, dt * n_samples * n_step_per_episodes, dt), np.array(states)[:, 0], label='Angle')
-        ax.plot(np.arange(0, dt * n_samples * n_step_per_episodes, dt), np.array(rewards), label='Reward')
-        ax.plot(np.arange(0, dt * n_samples * n_step_per_episodes, dt), np.array(states)[:, 1], label='Angular Velocity')
-        ax.hlines(0, 0, dt * n_samples * n_step_per_episodes, colors='r', linestyles='dashed', label='Zero Line')
-        ax.plot(np.arange(0, dt * n_samples * n_step_per_episodes, dt), np.array(actions), label='Action')
+        ax.plot(np.arange(0, dt * len(states), dt), np.array(states)[:, 0], label='Angle')
+        ax.plot(np.arange(0, dt * len(states), dt), np.array(rewards), label='Reward')
+        ax.plot(np.arange(0, dt * len(states), dt), np.array(states)[:, 1], label='Angular Velocity')
+        ax.hlines(0, 0, dt * len(states), colors='r', linestyles='dashed', label='Zero Line')
+        # ax.plot(np.arange(0, dt * len(states), dt), np.array(actions)/10, label='Action/10')
+        for i in range(len(reset_flag)):
+            if reset_flag[i] == 1:
+                ax.axvline(x=i*dt, color='g', linestyle='--')
+
         ax.set_xlabel('Time')
         ax.set_xlabel('Angle')
         ax.set_ylabel('Angular Velocity')
@@ -95,7 +90,7 @@ def generate_ssar(n_samples=100, n_step_per_episodes = 100, dt=0.01, policy = No
 
 if __name__ == "__main__":
     # run_gui()
-    s,s1, a,r = generate_ssar(n_samples=10, n_step_per_episodes=50,dt=0.02, vis=True)
+    s,s1, a,r = generate_ssar(n_samples=3, n_step_per_episodes=200,dt=0.02, vis=True)
 
     
     ssar = np.concatenate((s, s1, a.reshape(-1, 1), r.reshape(-1, 1)), axis=1)
