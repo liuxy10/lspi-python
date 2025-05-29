@@ -1,5 +1,4 @@
 classdef LQR_PolicyIteration
-   
 %%    
     properties
 %         timeStep;      % scalar variable for time step
@@ -33,7 +32,7 @@ classdef LQR_PolicyIteration
         outputLimit;
         mode;    % 0 enable sample adding mode, 1 diable sample adding mode
 %         firstTime;
-        k; % iteration number
+        k;
         successflag; %  4 phase convergence flag: 1 for success
         convergence; %  convergence flag for each phase
         lockPhase;
@@ -76,7 +75,7 @@ classdef LQR_PolicyIteration
             
             obj.gamma=0.9;
             obj.OnlineMode=0;
-            obj.outputLimit = [0.2, 0.2, 0.2, 0.2; 0.5 0.5 0.5 0.5]; %[1, 1, 1, 1];            
+            obj.outputLimit = [0.2, 0.2, 0.2, 0.2;0.5 0.5 0.5 0.5]; %[1, 1, 1, 1];            
             obj.mode = 0;            
 %             obj.firstTime = true;
             obj.k = 1;
@@ -628,7 +627,7 @@ classdef LQR_PolicyIteration
 %                 decayNum=size(pi.blocks{index}.stateHist,2)-sub;
                 decayNum=size(pi.blocks{index}.stateHist,2)-find(pi.blocks{index}.updateflag,1,'last');
                 pi.epsilon_k=pi.epsilon_zero*pi.epsilon_d^(decayNum);
-                epsilon=binornd(1,pi.epsilon_k); 
+                epsilon=binornd(1,pi.epsilon_k);
                 if epsilon==1
                     action =quadprog(H,f,[],[],[],[],-b,b,[],options);
                     actionTake=1*(rand(size(pi.nAction))-0.5).*b;

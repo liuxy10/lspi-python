@@ -3,17 +3,196 @@ import os
 from lspi.sample import Sample
 
 import numpy as np
-
+import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from plot_traj_sagittal import plot_leg_sagittal_plane
+import statsmodels.api as sm
 # import pykeyboard # Ensure this library is installed and compatible with your environment
 from pynput import keyboard
 
+def feature_regression_analysis(state_mean, state_std, state_names, params, param_names=None, print_results=True, vis = True):
+    """
+    Perform weighted least squares regression of each feature mean against params.
+
+    Args:
+        state_mean (np.ndarray): Mean values for each feature (n_param_sets x n_features).
+        state_std (np.ndarray): Std values for each feature (n_param_sets x n_features).
+        state_names (np.ndarray or list): Names of features (n_features,).
+        params (np.ndarray): Parameter values (n_param_sets x n_params).
+        param_names (list or None): Optional, names of parameters.
+        print_results (bool): If True, print regression results.
+
+    Returns:
+        results_df (pd.DataFrame): DataFrame with regression stats for each feature.
+    """
+    
+
+    # create a dictionary to hold feature means, stds, and weights
+    feature_dict = {}
+    
+    for i in range(len(state_names)): # iterate over features
+        feature_name = state_names[i]
+        means, sds = [], []
+        for j in range(len(state_mean)): # iterate over parameter sets
+            means.append(float(state_mean[j][i]))
+            sds.append(float(state_std[j][i]) if float(state_std[j][i]) != 0 else 1e-6)
+        feature_dict[feature_name] = {'means': means, 
+                                      'sds': sds, 
+                                      "weights": 1}  # initialize weights to 1
+
+   
+    
+    if param_names is None:
+        param_names = [f'param{i+1}' for i in range(params.shape[1])]
+    params_df = pd.DataFrame(params, columns=param_names)
+    
+    results = []
+ 
+    for feature, data in feature_dict.items():
+        means = np.array(data['means'])
+        sds = np.array(data['sds'])
+        # weights = np.array(data['weights'])
+
+        wls = False# not making sense
+        if wls:
+            # Calculate variances
+            global_var = np.var(means, ddof=1)  # Sample variance of means
+            within_vars = sds**2
+            
+            # Handle zero variances
+            within_vars = np.where(within_vars == 0, 1e-6, within_vars)
+            
+            # Compute standardized weights
+            weights = global_var / within_vars
+            
+            # Normalize weights
+            weights /= weights.mean()  # Optional but often recommended
+    
+        else:
+            # Use standard deviation as weights
+            weights = 1
+
+
+        X = sm.add_constant(params_df) # params are predictors
+        model = sm.WLS(means, X, weights=weights).fit()
+
+        results.append({
+            'feature': feature,
+            'F': model.fvalue,
+            'p': model.f_pvalue,
+            'R²': model.rsquared,
+            'params': [f"{p:.4f}" for p in model.params],  # coefficients rounded to 4 digits
+            # 'weights': weights,
+        })
+
+    results_df = pd.DataFrame(results).sort_values('p')
+    pd.options.display.float_format = '{:.4f}'.format
+
+    if print_results:
+        print("Weighted Regression Results (sorted by p-value):")
+        print(results_df[['feature', 'F', 'p', 'R²', 'params']].to_string(index=False))
+        print("\nSignificant Features (p < 0.05):")
+        print(results_df[results_df.p < 0.05][['feature', 'F', 'p',  'R²', 'params']].to_string(index=False))
+        
+        verbose = False
+        if verbose: 
+            # also print the regression results for each significant feature
+            print("\nDetailed Regression weights for Significant Features:")
+            for index, row in results_df[results_df.p < 0.05].iterrows():
+                feature = row['feature']
+                means = np.array(feature_dict[feature]['means'])
+                sds = np.array(feature_dict[feature]['sds'])
+                if wls:
+                    # Calculate variances
+                    global_var = np.var(means, ddof=1)  # Sample variance of means
+                    within_vars = sds**2
+                    
+                    # Handle zero variances
+                    within_vars = np.where(within_vars == 0, 1e-6, within_vars)
+                    
+                    # Compute standardized weights
+                    weights = global_var / within_vars
+                    
+                    # Normalize weights
+                    weights /= weights.mean()  # Optional but often recommended
+                else:
+                    weights = feature_dict[feature]['weights']
+                X = sm.add_constant(params_df)
+                model = sm.WLS(means, X, weights=weights).fit()
+                print(f"\nFeature: {feature}")
+                print(model.summary())
+
+    if vis:
+            # R squared values visualization
+        plt.figure(figsize=(10, 8)) # Increased figure height for better label visibility
+        plt.barh(results_df['feature'], results_df['R²'], color='skyblue')
+        plt.xlabel('R² Value')
+        plt.title('Feature Regression R² Values')
+        plt.grid(axis='x')
+        plt.gca().invert_yaxis() # To match the order of print output (highest R² at top)
+        plt.tight_layout() # Adjust layout to make room for feature names
+        plt.show()
+
+        # p-values visualization
+        plt.figure(figsize=(10, 8)) # Increased figure height
+        plt.barh(results_df['feature'], results_df['p'], color='lightgreen')
+        plt.xlabel('p-value')
+        plt.title('Feature Regression p-values')
+        plt.axvline(x=0.05, color='red', linestyle='--', label='p = 0.05 (Significance Threshold)')
+        plt.legend()
+        plt.grid(axis='x')
+        plt.gca().invert_yaxis() # To match the order of print output
+        plt.tight_layout() # Adjust layout
+        plt.show()
+
+        # coefficients visualization via heatmap
+        plt.figure(figsize=(12, 8))
+        coeffs = np.array([[float(val) for val in row['params']] for _, row in results_df.iterrows()])
+        sns.heatmap(coeffs, annot=True, fmt=".4f", cmap='coolwarm', 
+                    xticklabels=np.concatenate([["bias"], param_names]), yticklabels=results_df['feature'], cbar_kws={'label': 'Coefficient Value'})
+        plt.title('Feature Coefficients Heatmap with normalized I/O')
+        plt.xlabel('Parameters')
+        plt.ylabel('Features')
+        plt.tight_layout()
+        plt.show()
+        
+
+
+
+    return results_df
+
+
+def visualize_states(states, ids = [0,1,2], names = None):
+    if len(ids) != 3:
+        raise ValueError("Please provide exactly three indices for 3D visualization.")
+    # visualize the first three features of the states in 3D
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Use a colormap to get distinct colors for each parameter set
+    colors = plt.cm.get_cmap('viridis', len(states))
+
+    for i, state in enumerate(states):
+        ax.scatter(state[:, ids[0]], state[:, ids[1]], state[:, ids[2]], color=colors(i), label=f'param set {i}', alpha=0.5)
+    if names is not None:
+        ax.set_xlabel(f'feature {ids[0]} ({names[ids[0]]})')
+        ax.set_ylabel(f'feature {ids[1]} ({names[ids[1]]})')
+        ax.set_zlabel(f'feature {ids[2]} ({names[ids[2]]})')
+    else:
+        ax.set_xlabel(f'feature {ids[0]}')
+        ax.set_ylabel(f'feature {ids[1]}')
+        ax.set_zlabel(f'feature {ids[2]}')
+    ax.set_title('3D Visualization of States')
+    ax.legend()
+    
+    plt.show()
+
+
 
 def visualize_gait_cycle(cfg, file, data_list):
-    plot_data(file, cfg, data_list,["LOADCELL"], ylim=[-30, 140])
+    plot_data(file, cfg, data_list,["LOADCELL"], ylim=[-30, 180])
     plot_data(file, cfg, data_list,["ACTUATOR_POSITION"], ylim=[-60,130])
     plot_data(file, cfg, data_list,["SHANK_ANGLE"], ylim=[-60,110])
     plot_data(file, cfg, data_list,["GAIT_PHASE"], ylim=[-0.1,1.1])
@@ -46,11 +225,14 @@ def plot_data(file, cfg, data_list, names, ylim,
             plt.plot(np.arange(0,1,0.01), mean, label=f"mean {name.lower()}", color = "black", linewidth = 2)
             plt.fill_between(np.arange(0,1,0.01), mean-3*std, mean+3*std, alpha=0.2, color= "black")
             # mean_phase_change =  mean_st_sw_phase(data_list, loadcell_threshold = cfg["loadcell_threshold"])
-            # mean_phase_change = np.mean([np.where(data["GAIT_PHASE"])[0][0] for data in data_list])
-            mean_phase_change = np.min([np.where(data["GAIT_SUBPHASE"]> 0)[0][0] for data in data_list])
+            phase_change = np.array([np.where(data["GAIT_PHASE"])[0][0] for data in data_list])
+            mean_phase_change = phase_change.mean()
+            # mean_phase_change = np.min([np.where(data["GAIT_SUBPHASE"]> 0)[0][0] for data in data_list])
             plt.axvline(mean_phase_change / 100, color='green', linestyle='--')
             plt.text(mean_phase_change / 100, ylim[1] - 0.05 * (ylim[1] - ylim[0]), 
-                     f"{mean_phase_change/100:.2f}", fontsize=10, color="green")
+                     f"pc:{mean_phase_change/100:.2f}", fontsize=10, color="green")
+            # plot the phase change point
+            plt.scatter(phase_change/100, [data_list[j][name].iloc[int(phase_change[j])] for j in range(len(data_list))], s=15, c="green", marker="o")
             if mark_max_min:
                 
                 min_idx_before = np.nanargmin(mean[:int(mean_phase_change)])
@@ -59,19 +241,22 @@ def plot_data(file, cfg, data_list, names, ylim,
                 min_idx_after = np.nanargmin(mean[int(mean_phase_change):]) + int(mean_phase_change)
 
                 
-                plt.scatter(max_idx_before/100, mean[max_idx_before], s=15, c="black", marker="o")
-                plt.scatter(min_idx_before/100, mean[min_idx_before], s=15, c="black", marker="x")
+                plt.scatter(max_idx_before/100, mean[max_idx_before], s=15, c="red", marker="o")
+                plt.scatter(min_idx_before/100, mean[min_idx_before], s=15, c="blue", marker="x")
+                plt.axvline(max_idx_before / 100, color='red', linestyle='--')
+                plt.axvline(min_idx_before / 100, color='blue', linestyle='--')
                 plt.text(max_idx_before/100, mean[max_idx_before] + 0.05 * (ylim[1] - ylim[0]), 
-                         f"max: {mean[max_idx_before]:.2f} at {max_idx_before/100:.2f}", fontsize=10, color="black")
+                         f"max: {mean[max_idx_before]:.2f} at {max_idx_before/100:.2f}", fontsize=10, color="red")
                 plt.text(min_idx_before/100, mean[min_idx_before] - 0.05 * (ylim[1] - ylim[0]), 
-                         f"min: {mean[min_idx_before]:.2f} at {min_idx_before/100:.2f}", fontsize=10, color="black")
-
-                plt.scatter(max_idx_after/100, mean[max_idx_after], s=15, c="black", marker="o")
-                plt.scatter(min_idx_after/100, mean[min_idx_after], s=15, c="black", marker="x")
+                         f"min: {mean[min_idx_before]:.2f} at {min_idx_before/100:.2f}", fontsize=10, color="blue")
+                plt.axvline(max_idx_after / 100, color='red', linestyle='--')
+                plt.axvline(min_idx_after/ 100, color='blue', linestyle='--')
+                plt.scatter(max_idx_after/100, mean[max_idx_after], s=15, c="red", marker="o")
+                plt.scatter(min_idx_after/100, mean[min_idx_after], s=15, c="blue", marker="x")
                 plt.text(max_idx_after/100, mean[max_idx_after] + 0.05 * (ylim[1] - ylim[0]), 
-                         f"max: {mean[max_idx_after]:.2f} at {max_idx_after/100:.2f}", fontsize=10, color="black")
+                         f"max: {mean[max_idx_after]:.2f} at {max_idx_after/100:.2f}", fontsize=10, color="red")
                 plt.text(min_idx_after/100, mean[min_idx_after] - 0.05 * (ylim[1] - ylim[0]), 
-                         f"min: {mean[min_idx_after]:.2f} at {min_idx_after/100:.2f}", fontsize=10, color="black")
+                         f"min: {mean[min_idx_after]:.2f} at {min_idx_after/100:.2f}", fontsize=10, color="blue")
                 
     plt.ylim(ylim[0], ylim[1])
     plt.legend()
@@ -87,6 +272,50 @@ def plot_data(file, cfg, data_list, names, ylim,
 
 # def mean_st_sw_phase(data_list, loadcell_threshold = 0.5):
 #     return np.mean([np.where(np.where(data_list[i]["LOADCELL"] < loadcell_threshold, 1, 0))[0][0] for i in range(len(data_list))])
+
+
+def moving_average(data_list, avg_gait_num):
+    """
+    Calculate the moving average of the data list.
+    """
+    
+    if len(data_list) < avg_gait_num:
+        return data_list
+    else:
+        # print(f"moving average of {len(data_list)} gait cycles with {avg_gait_num} gait cycles, with {[dat.shape for dat in data_list]} shape")
+        # For each window, concatenate DataFrames horizontally, then group by column name and average.
+        # This correctly averages columns with the same name from different DataFrames in the window.
+        # Concatenate DataFrames horizontally, then group by column name and average, keeping only one column per name
+        return [
+            pd.concat([df.reset_index(drop=True) for df in data_list[i : i + avg_gait_num]], axis=1)
+            .T.groupby(by=lambda x: x.split('.')[0]).mean().T
+            for i in range(len(data_list) - avg_gait_num + 1)
+        ]
+
+def print_state_stats(params, states, names=None):
+    # Prepare column names as string representations of params
+    param_names = [", ".join([f"{p:.2f}" for p in param]) for param in params]
+
+    # Prepare state names
+    if names is None:
+        n_states = states[0].shape[1]
+        state_names = [f"State {j}" for j in range(n_states)]
+    else:
+        state_names = names
+
+    # Compute mean and std for each state variable for each param set
+    data = []
+    for j in range(len(state_names)):
+        row = []
+        for i in range(len(states)):
+            avg = states[i].mean(axis=0)
+            std = states[i].std(axis=0)
+            row.append(f"{avg[j]:.2f}±{std[j]:.2f}")
+        data.append(row)
+
+    df = pd.DataFrame(data, index=state_names, columns=param_names)
+    print("State means±std for each param set (columns are param sets):")
+    print(df.to_string())
 
 def skip_outliers(data, sw_st_idx, cfg, variable_name, test = False):
     """
@@ -110,10 +339,12 @@ def skip_outliers(data, sw_st_idx, cfg, variable_name, test = False):
         # interpolate the data to 100 points
         interpolated_data = interpolated_data.iloc[np.linspace(0, len(interpolated_data)-1, 100).astype(int)]
         # add hip velocity and shank velocity in the interpolated data
+        interpolated_data["ACTUATOR_POSITION"] = interpolated_data["ACTUATOR_POSITION"].rolling(window=5, center=True, min_periods=1).mean()
+        interpolated_data["SHANK_ANGLE"] = interpolated_data["SHANK_ANGLE"].rolling(window=5, center=True).mean()
         interpolated_data["HIP_ANGLE"] = interpolated_data["ACTUATOR_POSITION"] - interpolated_data["SHANK_ANGLE"]
-        interpolated_data["HIP_VELOCITY"] = np.gradient(interpolated_data["HIP_ANGLE"].rolling(window=5, center=True).mean(), 0.1) # Smooth data with rolling mean
-        interpolated_data["SHANK_VELOCITY"] = np.gradient(interpolated_data["SHANK_ANGLE"].rolling(window=5, center=True).mean(), 0.1)
-        interpolated_data["KNEE_VELOCITY"] = np.gradient(interpolated_data["ACTUATOR_POSITION"].rolling(window=5, center=True).mean(), 0.1)
+        interpolated_data["HIP_VELOCITY"] = np.gradient(interpolated_data["HIP_ANGLE"].rolling(window=5, center=True, min_periods=1).mean(), 0.1) # Smooth data with rolling mean
+        interpolated_data["SHANK_VELOCITY"] = np.gradient(interpolated_data["SHANK_ANGLE"].rolling(window=5, center=True, min_periods=1).mean(), 0.1)
+        interpolated_data["KNEE_VELOCITY"] = np.gradient(interpolated_data["ACTUATOR_POSITION"].rolling(window=5, center=True, min_periods=1).mean(), 0.1)
         # # skip the gait cycles that stance and swing are inproportional
         if np.sum(interpolated_data["GAIT_PHASE"]) >  70 or np.sum(interpolated_data["GAIT_PHASE"]) < 30:
             print(f"skip gait cycle {i} because of inproportional phase")

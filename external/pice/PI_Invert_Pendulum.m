@@ -9,6 +9,9 @@ xi=[0.4;0.2];
 model=model.reset([0;0], xi);
 model.rewardtype=1;
 model.xnorm=[pi/2;2*pi];
+
+
+
 mPI=LQR_PolicyIteration(2,1,1);
 mPI.actionbound=1;
 mPI.normalAction=1;

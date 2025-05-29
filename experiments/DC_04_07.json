@@ -1,6 +1,7 @@
 
 {
     "experiment_name": "Data Collection 04/07",
+    "subject_name": "Soe",
     "description": "This experiment collects data by varying three control variables across specified ranges.",
     "control_variables": [
 

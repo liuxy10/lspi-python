@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     from utils import *
     from lspi.solvers import LSTDQSolver, PICESolver
-    from lspi.train_offline import lspi_loop_offline
+    from lspi.lspi_train_offline import lspi_loop_offline
     from lspi.policy_ct import convertW2S, QuadraticPolicy
 
 

@@ -35,7 +35,7 @@ active=1;
 updateflag=1;
 epsilon_zero=0.5;
 epsilon_d=0.5;
-samples_per_iteration = 300; % number of samples per iteration
+samples_per_iteration = 500; % number of samples per iteration
 empty_result.state = [0;0]; % start value,neg peak value, neg peak position, pos peak value and position
 empty_result.action = [0;0];
 empty_result.reward = 0.0;
@@ -101,7 +101,7 @@ for k=1:100 % for each policy update iteration
         end
        End=size(updateflag,1)-1;
     %    [mPI,~]=cvxW(mPI,Start,End,1); 
-       policy = lspi("pendulum", 6, 10e-4, samples, 'basis_quadratic', 0.9, policy);
+       policy = lspi("pendulum", 1, 10e-4, samples, 'basis_quadratic', 0.9, policy);
     %    plotValue(policy);
     %    plotPolicy(policy);
        failure=0;
@@ -136,12 +136,6 @@ plotPolicy(policy);
 % ylabel('V');
 % zlabel('T');
 %%
-
-plotValue(mPI,0);
-plotPolicy(mPI);
-hold on;
-%  save('offP.mat','mPI','model')
-
 
 
 %% redefine policy
