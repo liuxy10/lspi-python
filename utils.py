@@ -42,8 +42,7 @@ def feature_regression_analysis(state_mean, state_std, state_names, params, para
                                       'sds': sds, 
                                       "weights": 1}  # initialize weights to 1
 
-   
-    
+
     if param_names is None:
         param_names = [f'param{i+1}' for i in range(params.shape[1])]
     params_df = pd.DataFrame(params, columns=param_names)
@@ -161,7 +160,7 @@ def feature_regression_analysis(state_mean, state_std, state_names, params, para
 
 
 
-    return results_df
+    return results_df, model
 
 
 def visualize_states(states, ids = [0,1,2], names = None):

@@ -56,7 +56,7 @@ def feature_extractor(data_folder_path, cfg, vis = False, avg_gait_num = -1):
                 # Append action values to all state samples and save as npy array
                 states_list.append(state_values) # states represent features from single gait cycle
                 
-    return params, states_list, names
+    return params, states_list, np.array(names)
 
 
 def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = True, n = 4):
@@ -151,10 +151,6 @@ def data_loader(folder_path, cfg_path, use_save=False):
     # Print stats
     print_state_stats(params, states, names if 'names' in locals() else None)
 
-    # exit()
-
-
-
     return params, states, names if 'names' in locals() else None
 
 def create_ssar(folder_path, params, states, state_target, cfg, normalize=True, save=True):
@@ -202,6 +198,19 @@ def load_states(folder_path):
     
     return params, state_names, states,  state_mean, state_std
 
+# def run_emulation(policy, emulator, n_steps=100):
+#     """
+#     Run the emulator with the given policy for a number of steps.
+#     """
+#     history = []
+#     emulator.reset()
+#     for _ in range(n_steps):
+#         action = policy.sample_action(emulator.params)
+#         next_state = emulator.step(action)
+#         history.append(emulator.params.copy())
+#         print("param history:", history[-1], "Next state:", next_state)
+    
+#     return history
 
 
 if __name__ == "__main__":
@@ -215,6 +224,7 @@ if __name__ == "__main__":
         state_std = np.array([np.std(s, axis=0) for s in states])
     else:
         params, state_names, states,  state_mean, state_std = load_states(folder_path)
+
     print_state_stats(params, states, state_names)
 
     # # add trip occurance as one other feature manually
@@ -227,28 +237,37 @@ if __name__ == "__main__":
 
     RA = True # whether to do feature regression analysis and rank features
     if RA:
+        
         # normalize the feature
         state_mean_normalized = (state_mean - np.mean(state_mean, axis=0)) / np.std(state_mean, axis=0)
         # normalize the predictor
         params_normalized = (params - np.mean(params, axis=0)) / np.std(params, axis=0)
-        results_df = feature_regression_analysis(state_mean_normalized, state_std, state_names, params_normalized, param_names=["Init STF angle", "SWF target", "SW init"],vis = False)
+        results_df, model = feature_regression_analysis(state_mean_normalized, 
+                                                 state_std, 
+                                                 state_names, 
+                                                 params_normalized, param_names=["Init STF angle", "SWF target", "SW init"],vis = False)
+        
+        # 1st order approximation of the dynamics 
+        
         states = [states[i][:,results_df.index] for i in range(len(states))]
-        state_names = state_names[results_df.index]
-        state_mean = state_mean[:, results_df.index]
-        state_std = state_std[:, results_df.index]
+        # rank based on p-value (results_df index)
+        state_names, state_mean, state_std = state_names[results_df.index], state_mean[:, results_df.index], state_std[:,results_df.index]
 
-
-    # take the first 6 features as the state features
-    states = [s[:, :6] for s in states]
-    state_mean = state_mean[:, :6]
-    state_std = state_std[:, :6]
-
-
+    # specify by name:
+    target_names = ["st_sw_phase", "toe_off_time", "brake_time"]
+    n_state = len(state_names)
+    # filter states by names
+    states = [s[:, [np.where(state_names == name)[0][0] for name in target_names]] for s in states]
+    state_mean = np.array([np.mean(s, axis=0) for s in states])
+    state_std = np.array([np.std(s, axis=0) for s in states])
     n_action = params.shape[1]
-    n_state = states[0].shape[1] # if use all
+    state_names = np.array(target_names)
+    print(f"state_names: {state_names}, mean: {state_mean.mean(axis=0)}")
 
+   
+    ## Create SSA samples and save them
     ssar, offset, scale = create_ssar(folder_path, params, states, 
-                                      state_target = np.zeros(n_state ), 
+                                      state_target = state_mean.mean(axis=0), 
                                       cfg=json.load(open(cfg_path)), save=True)
     
 
@@ -258,20 +277,21 @@ if __name__ == "__main__":
 
     solver = PICESolver()#LSTDQSolver()
     policy, all_policies = lspi_loop_offline(solver, samples, 
-                                             discount=0.8,
-                                             epsilon=0.01, 
+                                             discount=0.9,
+                                             epsilon=0.001, 
                                              max_iterations=1)
     
     
     # Convert weights to state-action space
-
     print(convertW2S(policy.weights))
     np.save("policy_weights.npy", policy.weights) 
+
+    
 
     # check if the policy makes sense
     # create pseudo samples as the group mean of different param sets.
     pseudo_samples = []
-    for i in range(len(states)):
+    for i in range(1): #len(states)):
         state = states[i].mean(axis=0) -  np.zeros(n_state )
         state = (state - offset[0])/scale[0]
         policy_action = (policy.best_action(state) + offset[1]) * scale[1]
@@ -282,9 +302,6 @@ if __name__ == "__main__":
 
     
 
-
-
-    
 
 
 
