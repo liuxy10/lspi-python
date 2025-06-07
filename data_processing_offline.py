@@ -59,72 +59,6 @@ def feature_extractor(data_folder_path, cfg, vis = False, avg_gait_num = -1):
     return params, states_list, np.array(names)
 
 
-def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = True, n = 4):
-    """
-    shuffle the states and params, and create samples"""
-    
-    
-    pair_idx = np.random.randint(0, len(states), size = (n_samples, 2))
-    ssa_samples= []
-    
-    for i in range(n_samples):
-        # print(f"pair_idx: {pair_idx[i]}")
-        state = states[pair_idx[i, 0]]
-        next_state = states[pair_idx[i, 1]]
-        n_group = min(n, len(state))
-        within_param_set_idx = np.random.randint(0, len(state)-n_group + 1) # avg group mean 
-        state= np.mean(state[within_param_set_idx: within_param_set_idx + n_group], axis = 0) # calculate mean of a consecutive n_group samples
-        n_group = min(n, len(next_state))
-        within_param_set_idx = np.random.randint(0, len(next_state)-n_group + 1)
-        next_state= np.mean(next_state[within_param_set_idx: within_param_set_idx + n_group], axis = 0)
-
-        action = params[pair_idx[i, 1]] - params[pair_idx[i, 0]]
-
-        ssa_samples.append( np.concatenate([state - s_target, next_state - s_target, action], axis = 0))
-    ssa_samples = np.array(ssa_samples)
-    # print(f"ssa_samples.shape: {ssa_samples.shape}")
-    if normalize:
-        # Normalize the samples
-        n_s = states[0].shape[1]
-        mean_s, std_s = np.mean(ssa_samples[:, :n_s], axis=0), np.std(ssa_samples[:, :n_s], axis=0)
-        mean_a, std_a = np.mean(ssa_samples[:, 2* n_s:], axis=0), np.std(ssa_samples[:, 2*n_s:], axis=0)
-        # normalize states and action respectively
-        ssa_samples[:, :n_s] = (ssa_samples[:, :n_s] - mean_s) / std_s
-        ssa_samples[:, n_s:2*n_s] = (ssa_samples[:, n_s:2*n_s] - mean_s) / std_s
-        ssa_samples[:, 2*n_s:] = (ssa_samples[:, 2*n_s:] - mean_a) / std_a
-        return ssa_samples, [mean_s, mean_a], [std_s, std_a]
-
-    
-    return ssa_samples, [], []
-
-def add_quadratic_reward_stack(ssa_samples,  cfg, w_s = 0.8):
-    """
-    Add a quadratic reward stack to the samples.
-    The reward is calculated as:
-    reward = -1/2 * ||s - s_target||^2 * w_s - 1/2 * ||a||^2 * w_a
-    where w_s and w_a are the weights for the state and action respectively.
-    """
-    n_total = ssa_samples.shape[1]
-    n_action = len(cfg["control_variables"])
-    n_state = (n_total - n_action)//2
-    
-    # init reward stack 
-    s_err = ssa_samples[:,:n_state] 
-    assert w_s >= 0 and w_s <= 1, "w_s should be between 0 and 1"
-    w_a = np.sqrt(1 - w_s**2)
-    rew = - 1/2 * np.sum(s_err**2, axis=1) * w_s - 1/2 * np.sum(ssa_samples[:,-n_action:]**2, axis=1) * w_a
-    rew = rew.reshape(-1, 1)
-    # print(f"rew.shape", rew.shape)
-    
-    return np.concatenate([ssa_samples, rew], axis=1)
-
-
-def save_parameters_and_states(folder_path, params, names, states):
-    np.save(os.path.join(folder_path, "params.npy"), params)
-    np.save(os.path.join(folder_path, "param_names.npy"), names)
-    for i in range(len(states)):
-        state = states[i]
-        np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
 
 
 def data_loader(folder_path, cfg_path, use_save=False):
@@ -153,7 +87,7 @@ def data_loader(folder_path, cfg_path, use_save=False):
 
     return params, states, names if 'names' in locals() else None
 
-def create_ssar(folder_path, params, states, state_target, cfg, normalize=True, save=True):
+def create_ssar(folder_path, params, states, state_target, normalize=True, save=True):
 
     # Create SSA samples
     ssa_samples, offset, scale = create_ssa_samples(
@@ -166,7 +100,7 @@ def create_ssar(folder_path, params, states, state_target, cfg, normalize=True, 
     )
     print("Offset, scale: ", offset, scale)
     # Add quadratic reward stack
-    ssar = add_quadratic_reward_stack(np.array(ssa_samples), cfg=cfg, w_s=1.0)
+    ssar = add_quadratic_cost_stack(np.array(ssa_samples), n_action, w_s=1.0)
         
     if save:
         np.save(os.path.join(folder_path, "ssar.npy"), ssar)
@@ -186,7 +120,7 @@ def load_states(folder_path):
             ids.append(i)
     states = []
     for i in ids: #range(len(params)):
-        print(f"Loading state {i}, param {params[i]}")
+        # print(f"Loading state {i}, param {params[i]}")
         state = np.load(os.path.join(folder_path, f"state_{i}.npy"))
         states.append(state)
 
@@ -197,20 +131,6 @@ def load_states(folder_path):
     params = np.array(params[ids])[:, :3] 
     
     return params, state_names, states,  state_mean, state_std
-
-# def run_emulation(policy, emulator, n_steps=100):
-#     """
-#     Run the emulator with the given policy for a number of steps.
-#     """
-#     history = []
-#     emulator.reset()
-#     for _ in range(n_steps):
-#         action = policy.sample_action(emulator.params)
-#         next_state = emulator.step(action)
-#         history.append(emulator.params.copy())
-#         print("param history:", history[-1], "Next state:", next_state)
-    
-#     return history
 
 
 if __name__ == "__main__":
@@ -254,21 +174,21 @@ if __name__ == "__main__":
         state_names, state_mean, state_std = state_names[results_df.index], state_mean[:, results_df.index], state_std[:,results_df.index]
 
     # specify by name:
-    target_names = ["st_sw_phase", "toe_off_time", "brake_time"]
-    n_state = len(state_names)
+    target_names = ["st_sw_phase", "min_knee_position_phase_sw", "brake_time"]
+    n_state = len(target_names)
     # filter states by names
     states = [s[:, [np.where(state_names == name)[0][0] for name in target_names]] for s in states]
     state_mean = np.array([np.mean(s, axis=0) for s in states])
     state_std = np.array([np.std(s, axis=0) for s in states])
     n_action = params.shape[1]
     state_names = np.array(target_names)
-    print(f"state_names: {state_names}, mean: {state_mean.mean(axis=0)}")
+    # print(f"state_names: {state_names}, mean: {state_mean.mean(axis=0)}")
 
    
     ## Create SSA samples and save them
     ssar, offset, scale = create_ssar(folder_path, params, states, 
                                       state_target = state_mean.mean(axis=0), 
-                                      cfg=json.load(open(cfg_path)), save=True)
+                                      save=True)
     
 
     print(f"ssar shape: {ssar.shape}, n_state: {n_state}, n_action: {n_action}")
@@ -283,8 +203,9 @@ if __name__ == "__main__":
     
     
     # Convert weights to state-action space
-    print(convertW2S(policy.weights))
-    np.save("policy_weights.npy", policy.weights) 
+    print(np.array2string(convertW2S(policy.weights), formatter={'float_kind':lambda x: "%.4f" % x})) # convert state to weights
+    np.save(os.path.join(folder_path, "policy_weights.npy"), policy.weights)
+    print(f"Policy weights saved to {os.path.join(folder_path, 'policy_weights.npy')}")
 
     
 

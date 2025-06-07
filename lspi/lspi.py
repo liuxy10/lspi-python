@@ -4,9 +4,10 @@
 from copy import copy
 
 import numpy as np
+from lspi.policy_ct import convertW2S
 
 
-def learn(data, initial_policy, solver, epsilon=10**-5, max_iterations=100):
+def learn(data, initial_policy, solver, epsilon=10**-5, max_iterations=30, verbose=True):
 
     if epsilon <= 0:
         raise ValueError('epsilon must be > 0: %g' % epsilon)
@@ -21,14 +22,16 @@ def learn(data, initial_policy, solver, epsilon=10**-5, max_iterations=100):
     iteration = 0
     while distance > epsilon and iteration < max_iterations:
         iteration += 1
-        
-        # print(f"data, current_policy, solver: {data}, {curr_policy}, {solver}")
         new_weights = solver.solve(data, curr_policy)
+        new_weights = new_weights/ np.linalg.norm(new_weights)  # normalize weights
         distance = np.linalg.norm(new_weights - curr_policy.weights)
-        try:
-            print(f"i={iteration} Distance: {distance}, Hf, Huu: {curr_policy.Hf}, {curr_policy.Huu}")
-        except:
-            print(f"i={iteration} Distance: {distance}")
+        if verbose:
+            print("New weights:", np.array2string(convertW2S(new_weights), formatter={'float_kind':lambda x: "%.4f" % x}))
+            print("current:", np.array2string(convertW2S(curr_policy.weights), formatter={'float_kind':lambda x: "%.4f" % x}) ) # convert state to weights
+            try:
+                print(f"i={iteration} Distance: {distance}, Hf, Huu: {curr_policy.Hf}, {curr_policy.Huu}")
+            except:
+                print(f"i={iteration} Distance: {distance}")
         curr_policy.weights = new_weights.copy()
         
 

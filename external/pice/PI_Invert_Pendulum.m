@@ -135,7 +135,7 @@ for n=1:1000
 %         end
         normState=state'./mPI.normalState;
         action=mPI.getAction(normState,1,0);
-        [model,actionTake]=model.simulate(action);
+        [model,actionTake]=model.simulate(action); 
         [nextState, reward] = model.getState();
         hist=[hist,state'];
 end

@@ -12,6 +12,28 @@ import statsmodels.api as sm
 # import pykeyboard # Ensure this library is installed and compatible with your environment
 from pynput import keyboard
 
+def vis_hist(his, skip = 1, names = None):
+    # visualize all histories as subplots on the same figure
+
+
+    fig, axes = plt.subplots(len(his), 1, figsize=(6, 1.5 * len(his)), sharex=True)
+    if len(his) == 1:
+        axes = [axes]
+    for idx, (k, v) in enumerate(his.items()):
+        v = np.array(v)
+        ax = axes[idx]
+        if v.ndim == 1:
+            ax.plot(np.arange(0, v.shape[0],step = skip), v[::skip], marker='o', alpha=0.5)
+        else:
+            for i in range(v.shape[1]):
+                ax.plot(np.arange(0, v.shape[0],step = skip), v[::skip, i], marker='o', alpha=0.5, label=f"{k}_{i}" if names is None or k not in names.keys() else f"{names[k][i]}")
+            ax.legend()
+        ax.set_title(f"History of {k} over iterations")
+        ax.set_ylabel(k)
+    axes[-1].set_xlabel("Iteration")
+    plt.tight_layout()
+    plt.show()
+
 def feature_regression_analysis(state_mean, state_std, state_names, params, param_names=None, print_results=True, vis = True):
     """
     Perform weighted least squares regression of each feature mean against params.
@@ -156,10 +178,6 @@ def feature_regression_analysis(state_mean, state_std, state_names, params, para
         plt.ylabel('Features')
         plt.tight_layout()
         plt.show()
-        
-
-
-
     return results_df, model
 
 
@@ -272,6 +290,77 @@ def plot_data(file, cfg, data_list, names, ylim,
 # def mean_st_sw_phase(data_list, loadcell_threshold = 0.5):
 #     return np.mean([np.where(np.where(data_list[i]["LOADCELL"] < loadcell_threshold, 1, 0))[0][0] for i in range(len(data_list))])
 
+
+def quad_cost(ssa_samples, w_s, n_action, n_state, w_a):
+    rew = 1/2 * np.sum(ssa_samples[:,:n_state] **2, axis=1) * w_s + 1/2 * np.sum(ssa_samples[:,-n_action:]**2, axis=1) * w_a
+    rew = rew.reshape(-1, 1)
+    return rew
+
+def add_quadratic_cost_stack(ssa_samples, n_action, w_s = 0.8, cost_func = None):
+    """
+    Add a quadratic reward stack to the samples.
+    The reward is calculated as:
+    reward = -1/2 * ||s - s_target||^2 * w_s - 1/2 * ||a||^2 * w_a
+    where w_s and w_a are the weights for the state and action respectively.
+    """
+    if cost_func is None:
+        cost_func = quad_cost
+    n_total = ssa_samples.shape[1]
+    n_state = (n_total - n_action)//2
+    
+    # init reward stack 
+    assert w_s >= 0 and w_s <= 1, "w_s should be between 0 and 1"
+    w_a = np.sqrt(1 - w_s**2)
+    rew = cost_func(ssa_samples, w_s, n_action, n_state, w_a)
+    # print(f"rew.shape", rew.shape)
+    
+    return np.concatenate([ssa_samples, rew], axis=1)
+
+
+def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = True, n = 4):
+    """
+    shuffle the states and params, and create samples"""
+    
+    
+    pair_idx = np.random.randint(0, len(states), size = (n_samples, 2))
+    ssa_samples= []
+    
+    for i in range(n_samples): 
+        # print(f"pair_idx: {pair_idx[i]}")
+        state = states[pair_idx[i, 0]]
+        next_state = states[pair_idx[i, 1]]
+        n_group = min(n, len(state))
+        within_param_set_idx = np.random.randint(0, len(state)-n_group + 1) # avg group mean 
+        state= np.mean(state[within_param_set_idx: within_param_set_idx + n_group], axis = 0) # calculate mean of a consecutive n_group samples
+        n_group = min(n, len(next_state))
+        within_param_set_idx = np.random.randint(0, len(next_state)-n_group + 1)
+        next_state= np.mean(next_state[within_param_set_idx: within_param_set_idx + n_group], axis = 0)
+
+        action = params[pair_idx[i, 1]] - params[pair_idx[i, 0]]
+
+        ssa_samples.append( np.concatenate([state - s_target, next_state - s_target, action], axis = 0))
+    ssa_samples = np.array(ssa_samples)
+    # print(f"ssa_samples.shape: {ssa_samples.shape}")
+    if normalize:
+        # Normalize the samples
+        n_s = states[0].shape[1]
+        mean_s, std_s = np.mean(ssa_samples[:, :n_s], axis=0), np.std(ssa_samples[:, :n_s], axis=0)
+        mean_a, std_a = np.mean(ssa_samples[:, 2* n_s:], axis=0), np.std(ssa_samples[:, 2*n_s:], axis=0)
+        # normalize states and action respectively
+        ssa_samples[:, :n_s] = (ssa_samples[:, :n_s] - mean_s) / std_s
+        ssa_samples[:, n_s:2*n_s] = (ssa_samples[:, n_s:2*n_s] - mean_s) / std_s
+        ssa_samples[:, 2*n_s:] = (ssa_samples[:, 2*n_s:]) / std_a # for action, we only normalize by std, not mean, because action is centered around 0
+        return ssa_samples, [mean_s, mean_a], [std_s, std_a]
+
+    return ssa_samples, [], []
+
+
+def save_parameters_and_states(folder_path, params, names, states):
+    np.save(os.path.join(folder_path, "params.npy"), params)
+    np.save(os.path.join(folder_path, "param_names.npy"), names)
+    for i in range(len(states)):
+        state = states[i]
+        np.save(os.path.join(folder_path, f"state_{i}.npy"), states[i])
 
 def moving_average(data_list, avg_gait_num):
     """

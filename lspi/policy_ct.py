@@ -19,16 +19,17 @@ class QuadraticPolicy(Policy):
     
     def __init__(self, n_state, n_action, discount=1.0, explore=0.0, weights=None, 
                   folder_path = None):
+        self.folder_path = folder_path
         self.n_action = n_action
         self.n_state = n_state
         self.n_basis = int((n_action + n_state)*(n_state + n_action + 1)/2)
-        print(f"Number of basis functions: {self.n_basis}")
+        # print(f"Number of basis functions: {self.n_basis}")
         self.basis = QuadraticBasisFunction(n_state, n_action)
  
 
         if folder_path is not None:
             # load scaling and offset for policy 
-            self.offset_a = np.load(os.path.join(folder_path, "offset_a.npy"))
+            self.offset_a = 0 #np.load(os.path.join(folder_path, "offset_a.npy"))
             self.scale_a = np.load(os.path.join(folder_path,"scale_a.npy"))
             self.offset_s = np.load(os.path.join(folder_path,"offset_s.npy"))
             self.scale_s = np.load(os.path.join(folder_path,"scale_s.npy"))
@@ -49,10 +50,7 @@ class QuadraticPolicy(Policy):
                         self.discount,
                         self.explore,
                         np.copy(self.weights),
-                        scale_s=self.scale_s,
-                        scale_a=self.scale_a,
-                        offset_s=self.offset_s,
-                        offset_a=self.offset_a
+                        self.folder_path,
                        )
     
     def calc_q_value(self, state, action):
@@ -62,13 +60,24 @@ class QuadraticPolicy(Policy):
         """Calculate Q-value for a given state-action pair."""
         return self._calc_q_value(state, action)
     
-    def _calc_q_value(self, state, action):
+    def _calc_q_value(self, state, action): # q value should be all positive 
         # if action.shape[0] < 0 or action >= self.n_action:
         #     raise IndexError('action must be in range [0, num_actions)')
+    
         self.Huu, self.Hf = self.extract_qp_parameters(state)
-        q = - 0.5 * action[None,:] @ self.Huu @ action[:,None] - self.Hf @ action[:,None]
-
+        q = 0 
+        # q += 0.5 * action[None,:] @ self.Huu @ action[:,None]  # for testing
+        q += self.Hf @ action[:,None] # linear term
         return q # self.weights.dot(self.basis.evaluate(state, action))
+    
+    def calc_stage_cost(self, state, action):
+        """Calculate stage cost for a given state-action pair."""
+        # scale and offset state and action
+        state = (state - self.offset_s) / self.scale_s
+        action = (action - self.offset_a) / self.scale_a
+        return self._calc_stage_cost(state, action)
+    
+
 
     def update_state_dependent_constraints(self, first_stiff_timing, second_stiff_timing):
         self.first_stiff_timing = first_stiff_timing
@@ -101,10 +110,13 @@ class QuadraticPolicy(Policy):
         # ]) # Action bounds
         
         # Solve constrained optimization
+        # print(self.Hf)
+
         res = minimize(
-            fun=lambda a: 0.5 * a[None,:] @ self.Huu @ a[:,None] + self.Hf @ a[:,None], 
+            # fun=lambda a: self.Hf @ a[:,None] + 0.5 * a[None,:] @ self.Huu @ a[:,None] , 
+            fun = lambda a: self.Hf @ a[:,None] ,
             x0=np.zeros((self.n_action,)),
-            bounds=[(-1, 1)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
+            bounds=[(-0.2, 0.2)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
             # constraints={'type': 'ineq', 'fun': lambda a: A @ a - Ax}
         )
         action = res.x

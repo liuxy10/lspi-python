@@ -3,14 +3,18 @@ from lspi.policy_ct import QuadraticPolicy
 import lspi
 import numpy as np
 
-def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, initial_policy=None):
+def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, initial_policy=None, verbose=True):
 
     # Initialize random seed
     # np.random.seed(int(sum(100 * np.random.rand())))
     n_action = samples[0].action.shape[0]
     n_state = samples[0].state.shape[0]
+    n_basis = int((n_action + n_state) * (n_state + n_action + 1) / 2)
+    w = np.random.uniform(0., 1.0, size=(n_basis,))
     # Create a new policy
-    policy = QuadraticPolicy(n_action= n_action, n_state= n_state, explore = 0.01, discount = discount)
+    policy = QuadraticPolicy(n_action= n_action, n_state= n_state, 
+                             explore = 0.01, discount = discount,
+                             weights=w)
     if initial_policy is None:
         initial_policy = policy.cp()
     
@@ -19,7 +23,7 @@ def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, in
     distance = float('inf')
     all_policies = [initial_policy.cp()]
  
-
+    
     # If no samples, return
     if not samples:
         print('Warning: Empty sample set')
@@ -32,7 +36,7 @@ def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, in
         print(f'LSPI iteration: {iteration}')
         iteration == 1
         # Evaluate the current policy (and implicitly improve)
-        policy = lspi.learn(samples, initial_policy.cp(), solver, epsilon=1e-2)
+        policy = lspi.learn(samples, initial_policy.cp(), solver, epsilon=1e-2, verbose=verbose)
         # Compute the distance between the. current and the previous policy
         assert len(policy.weights) == len(all_policies[-1].weights), "Policy weights do not match"
         difference = policy.weights - all_policies[-1].weights

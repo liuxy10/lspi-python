@@ -96,7 +96,8 @@ class LSTDQSolver(Solver):
 
             a_mat += phi_sa.dot((phi_sa - policy.discount*phi_sprime).T) 
             b_vec += phi_sa*sample.reward 
-        # print(f"a_mat: {a_mat}")
+        # print(f"a_mat: {a_mat}, b_vec: {b_vec}")
+        # print(f"a_mat: {a_mat.shape}, b_vec: {b_vec.shape}")
         a_rank = np.linalg.matrix_rank(a_mat)
         # print(f"a_rank: {a_rank}, k: {k}")
         if a_rank == k:
@@ -106,6 +107,7 @@ class LSTDQSolver(Solver):
         else:
             logging.warning('A matrix is not full rank. %d < %d', a_rank, k)
             w = scipy.linalg.lstsq(a_mat, b_vec)[0]
+        w = np.clip(w, 0, 1e10)  # Clip to avoid numerical issues
         # print(f"w: {w}, w.shape: {w.shape}, a_rank: {a_rank}, k: {k}")
         return w.reshape((-1, ))
 
@@ -137,7 +139,7 @@ class PICESolver(LSTDQSolver):
 
             a_mat += phi_sa.dot((phi_sa - policy.discount*phi_sprime).T) 
             b_vec += phi_sa*sample.reward 
-        # print(f"a_mat: {a_mat}")
+        # print(f"a_mat: {a_mat}, b_vec: {b_vec}")
         a_rank = np.linalg.matrix_rank(a_mat)
 
         
@@ -148,15 +150,16 @@ class PICESolver(LSTDQSolver):
         Cphi=a_mat/len(data)
         dphi=b_vec/len(data)
         while j<=1000 and error>1e-4:
-            oPhiw=phiw
+            oPhiw=phiw.copy()
             residuePhi=phiw-stepsize*(Cphi@phiw-dphi)
             phiw=proDysktra(residuePhi,100,1e-4)
+            # print("oPhiw: ", oPhiw, "phiw: ", phiw, Cphi@phiw-dphi, "stepsize: ", stepsize)
             j=j+1
             error=np.linalg.norm(oPhiw-phiw)
             stepsize=1/(j+1)
         
-        w=phiw
-
+        w=phiw 
+        
         return w.reshape((-1, ))
     
 
@@ -182,7 +185,7 @@ def proDysktra(x0,ballR,errTol):
         oldX=x
         s=convertW2S(x-I[:,1])
         D, V = eig(s)  # D is diagonal matrix, V is orthogonal
-        D[D>0]=0    # set negative eigenvalues to zero                          
+        D[D< 0]=0    # set negative eigenvalues to zero                          
         s=V@np.diag(D)@V.T
         x=convertS2W(s) # x is the new point
         oldI[:,1]=I[:,1]
