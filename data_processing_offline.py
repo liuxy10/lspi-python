@@ -99,7 +99,8 @@ def create_ssar(folder_path, params, states, state_target, normalize=True, save=
         n=100
     )
     print("Offset, scale: ", offset, scale)
-    # Add quadratic reward stack
+    # Add quadratic reward stack based on relative scale
+    ## TODO
     ssar = add_quadratic_cost_stack(np.array(ssa_samples), n_action, w_s=1.0)
         
     if save:

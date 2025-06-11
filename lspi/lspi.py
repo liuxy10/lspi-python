@@ -23,7 +23,7 @@ def learn(data, initial_policy, solver, epsilon=10**-5, max_iterations=30, verbo
     while distance > epsilon and iteration < max_iterations:
         iteration += 1
         new_weights = solver.solve(data, curr_policy)
-        new_weights = new_weights/ np.linalg.norm(new_weights)  # normalize weights
+        # new_weights = new_weights/ np.linalg.norm(new_weights)  # normalize weights
         distance = np.linalg.norm(new_weights - curr_policy.weights)
         if verbose:
             print("New weights:", np.array2string(convertW2S(new_weights), formatter={'float_kind':lambda x: "%.4f" % x}))

@@ -11,7 +11,7 @@ model.rewardtype=1;
 model.xnorm=[pi/2;2*pi];
 
 
-
+%% create the policy
 mPI=LQR_PolicyIteration(2,1,1);
 mPI.actionbound=1;
 mPI.normalAction=1;
@@ -41,20 +41,21 @@ for k=1:100 % for each policy update iteration
     while i<=1000 % for each trial    
         state=nextState;
         normState=state'./mPI.normalState;
-              
         [actionP,actionT]=mPI.getAction(normState,1,0);
         [model,actionTake]=model.simulate(actionT); 
         [nextState, reward] = model.getState();
         normNextState=nextState'./mPI.normalState; % normalize the state 
-        if abs(nextState(1))<pi/2 
-            fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
-                i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
+        
+        if abs(nextState(1))<pi/2 % if the pendulum is not falling
+            % fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
+                % i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
             mPI=mPI.addSample(normState, normNextState,actionT,actionP,[0;0],0,1); 
+            
             mPI.blocks{1}.updateflag=[mPI.blocks{1}.updateflag,0]; 
         else
             mPI=mPI.addSample(normState, normNextState,actionT,actionP,[0;0],1,1);
-            fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
-                i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
+            % fprintf('Sample %d: normState = [%f, %f], normNextState = [%f, %f], actionT = %f, reward = %f', ...
+                % i, normState(1), normState(2), normNextState(1), normNextState(2), actionTake, reward);
             
             mPI.blocks{1}.updateflag=[mPI.blocks{1}.updateflag,1];
             failure=1;
@@ -62,6 +63,7 @@ for k=1:100 % for each policy update iteration
         end
         i=i+1; 
         mPI.k=1+mPI.k; 
+        
         
     end
     
@@ -94,13 +96,13 @@ for k=1:100 % for each policy update iteration
 end
 
 model.showHist;
-plotValue(mPI,0);
-plotPolicy(mPI);
+% plotValue(mPI,0);
+% plotPolicy(mPI);
 
 %% check fitting error
 
 range=find(mPI.blocks{1}.resetHist==1);
-sIdx=1;
+sIdx=1; % start index of the training data
 % eIdx=range(end);
 eIdx=size(mPI.blocks{1}.nextStateHist,2);
 S=mPI.blocks{1, 1}.SHist(:,end-5:end-3) % stack of 3*3 matrix 
@@ -113,47 +115,57 @@ spa=[mPI.blocks{1, 1}.nextStateHist(:,sIdx:eIdx);pi_action]; % state-action stac
 Qs=diag(sa'*S*sa); % Q-value from the training data
 Qsp=diag(spa'*S*spa); % Q-value from the final policy
 figure;
-plot(Qs,mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp,'*'); % plot the cost
+scatter(Qs, mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)' + mPI.gamma*Qsp, 36, 1:length(Qs), 'filled'); % color by index
+% add diagonal line
 hold on;
-% plot(0:max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)]), 0:max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)]));
+maxVal = max([max(Qs), max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)' + mPI.gamma*Qsp)]); % find the maximum value for the diagonal line
+lineVals = linspace(0, maxVal, 100);
+plot(lineVals, lineVals, 'b--');
+grid on;
+title('Cost + \gamma*Q_{s''} vs Q_s');
+colorbar;
+xlabel('Q_s');
+ylabel('Cost + gamma*Q_{s''}');
+hold on;
+% plot(0:max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)]), 0:max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)])); % plot Q values
 % xlim([0 max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)])]);
-% ylim([0 max([max(Qs),max(mPI.blocks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)])]);
+% ylim([0 max([max(Qs),max(mPI.bloc dks{1, 1}.costHist(:,sIdx:eIdx)'+mPI.gamma*Qsp)])]);
 axis square;
 %%
-close all;
-xi=[0.4;-0.4];
-model=model.reset([0;0], xi);
-model.unoise=10;
-[nextState, reward] = getState(model);
-mPI.blocks{1}.active=0;
-hist=[];
-%mPI.epsilon_k=comm.internal.BernoulliBinaryGenerator('ProbabilityOfZero', 0, 'SamplesPerFrame', 1);
-for n=1:1000
-        state=nextState;
-%         if abs(nextState(1))>pi/2
-%             break;
-%         end
-        normState=state'./mPI.normalState;
-        action=mPI.getAction(normState,1,0);
-        [model,actionTake]=model.simulate(action); 
-        [nextState, reward] = model.getState();
-        hist=[hist,state'];
-end
-model.showHist; 
+% close all;
+% xi=[0.4;-0.4];
+% model=model.reset([0;0], xi);
+% model.unoise=10;
+% [nextState, reward] = getState(model);
+% mPI.blocks{1}.active=0;
+% hist=[];
+% %mPI.epsilon_k=comm.internal.BernoulliBinaryGenerator('ProbabilityOfZero', 0, 'SamplesPerFrame', 1);
+% for n=1:1000
+%         state=nextState;
+% %         if abs(nextState(1))>pi/2
+% %             break;
+% %         end
+%         normState=state'./mPI.normalState;
+%         action=mPI.getAction(normState,1,0);
+%         [model,actionTake]=model.simulate(action); 
+%         [nextState, reward] = model.getState();
+%         hist=[hist,state'];
+% end
+% model.showHist; 
 
-%%
-% data=[mPI.blocks{1}.stateHist(:,sIdx:eIdx);mPI.blocks{1}.actionTakeHist(:,sIdx:eIdx)];
-% obj = gmdistribution.fit(data',1);
-% plot3(data(1,:),data(2,:),data(3,:),'*');
-% xlabel('P');
-% ylabel('V');
-% zlabel('T');
-%%
+% %%
+% % data=[mPI.blocks{1}.stateHist(:,sIdx:eIdx);mPI.blocks{1}.actionTakeHist(:,sIdx:eIdx)];
+% % obj = gmdistribution.fit(data',1);
+% % plot3(data(1,:),data(2,:),data(3,:),'*');
+% % xlabel('P');
+% % ylabel('V');
+% % zlabel('T');
+% %%
 
-plotValue(mPI,0);
-plotPolicy(mPI);
-hold on;
-%  save('offP.mat','mPI','model')
+% plotValue(mPI,0);
+% plotPolicy(mPI);
+% hold on;
+% %  save('offP.mat','mPI','model')
 
 % plot(mPI.blocks{1}.stateHist(1,:),mPI.blocks{1}.stateHist(2,:),'r*');
 %%

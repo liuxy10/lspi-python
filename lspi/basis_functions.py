@@ -239,9 +239,6 @@ class QuadraticBasisFunction(BasisFunction):
             return np.array([10])
         if action.shape != (self.__num_actions,):
             action = action.flatten()
-
-            # raise ValueError('Action shape must match num_actions')
-
         z = np.concatenate((state, action))
         n = len(z)
         phi = []

@@ -28,6 +28,13 @@ def lspi_loop_offline(solver, samples, discount, epsilon, max_iterations = 5, in
     if not samples:
         print('Warning: Empty sample set')
         return policy, all_policies
+    
+
+    policy = lspi.learn(samples, initial_policy, solver, epsilon=1e-2, verbose=verbose, max_iterations=max_iterations)
+    all_policies.append(policy.cp())
+    
+    return policy, all_policies
+
     # Main LSPI loop
     while iteration < max_iterations and distance > epsilon:
         # Update and print the number of iterations

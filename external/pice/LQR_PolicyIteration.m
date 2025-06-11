@@ -207,7 +207,7 @@ classdef LQR_PolicyIteration
             pi.blocks{index}.costHist=[pi.blocks{index}.costHist,pi.blocks{index}.cost];
             
             pi.blocks{index}.CollectNum=pi.blocks{index}.CollectNum+1;
-            fprintf(['sample added at time step = ', num2str(pi.blocks{index}.timeStep),' during task ',num2str(index),'\n']);
+            % fprintf(['sample added at time step = ', num2str(pi.blocks{index}.timeStep),' during task ',num2str(index),'\n']);
             pi.blocks{index}.timeStep = pi.blocks{index}.timeStep + 1;
         end      
         %% Reset policy
@@ -481,9 +481,9 @@ classdef LQR_PolicyIteration
         function [pi,error,Cphi,dphi]=cvxW(pi,Start,End,index) % Use N+1 states & actions to calculate
         %     index=pi.activeBlock;
 
-            H=pi.blocks{index}.S(pi.nState+1 : pi.nState+pi.nAction, pi.nState+1 : pi.nState+pi.nAction);
-            Xu=pi.blocks{index}.S(1:pi.nState, pi.nState+1 : pi.nState+pi.nAction);
-            b=pi.actionbound(:,index)./pi.actionbound(:,index);
+            H=pi.blocks{index}.S(pi.nState+1 : pi.nState+pi.nAction, pi.nState+1 : pi.nState+pi.nAction); % quadratic cost matrix for action
+            Xu=pi.blocks{index}.S(1:pi.nState, pi.nState+1 : pi.nState+pi.nAction); % cross term matrix for state-action
+            b=pi.actionbound(:,index)./pi.actionbound(:,index); % 
         %     b=pi.actionbound(:,index)./pi.normalAction;
 
 %             validIdx=Start-1+find(pi.blocks{index}.resetHist(:,Start:End)==0);
@@ -492,14 +492,14 @@ classdef LQR_PolicyIteration
             pRatio=zeros(length(validIdx),1); % 1 for on-policy samples; 2 for off-policy samples
             for i=1:length(validIdx)
                 f= nextS(:,i)'*Xu; % for learning process
-                piAction(:,i)=quadprog(H,f',[],[],[],[],-b,b); % quadratic programming
+                piAction(:,i)=quadprog(H,f',[],[],[],[],-b,b,[],optimset('Display','off')); % quadratic programming (silent)
                 qstate(:,i) = pi.convert2qstate([pi.blocks{index}.stateHist(:,validIdx(i));
                                                  pi.blocks{index}.actionTakeHist(:,validIdx(i))]);
                 qstateNext(:,i)=pi.convert2qstate([pi.blocks{index}.nextStateHist(:,validIdx(i));
                                                    piAction(:,i)]);
-                 if norm(piAction(:,i)-pi.blocks{index}.actionTakeHist(:,validIdx(i)+1))<1e-7 
+                 if norm(piAction(:,i)-pi.blocks{index}.actionTakeHist(:,validIdx(i)+1))<1e-7  % if action is the same as next action
                      pRatio(i)=1;                             
-                 elseif norm(pi.blocks{index}.nextStateHist(:,validIdx(i))-pi.blocks{index}.stateHist(:,validIdx(i)+1))>1e-7
+                 elseif norm(pi.blocks{index}.nextStateHist(:,validIdx(i))-pi.blocks{index}.stateHist(:,validIdx(i)+1))>1e-7 % if next state is not the same as current state
                      pRatio(i)=1;
                  else
                      pRatio(i)=2;
@@ -580,7 +580,19 @@ classdef LQR_PolicyIteration
 %                 end
 
             end
-            [~,S]=convertW2S(pi,phiw);             
+
+            % disp('w from proDysktra:');
+            % disp(phiw);
+            % disp(['Cphi size: ', mat2str(size(Cphi))]);
+            % disp(['dphi size: ', mat2str(size(dphi))]);
+            % disp('w from pseudo inverse:');
+            % disp(pinv(Cphi) * dphi);
+
+            [~,S]=convertW2S(pi,phiw);    
+            [V,D]= eig(S);
+            fprintf("S matrix eigenvalues: ");
+            fprintf("%.3f ", diag(D));
+            fprintf("\n");
             pi.blocks{index}.S=S;
             pi.blocks{index}.SHist=[pi.blocks{index}.SHist,pi.blocks{index}.S];
             pi.blocks{index}.iterationStep=pi.blocks{index}.iterationStep+1;

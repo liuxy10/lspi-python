@@ -12,6 +12,16 @@ import statsmodels.api as sm
 # import pykeyboard # Ensure this library is installed and compatible with your environment
 from pynput import keyboard
 
+
+# Prepare samples for LSPI
+def sample_to_dict(samples):
+    s = np.array([x[0] for x in samples])
+    a = np.array([x[1] for x in samples])
+    r = np.array([x[2] for x in samples])
+    ns = np.array([x[3] for x in samples])
+    return {'state': s, 'action': a, 'reward': r, 'next_state': ns}
+
+
 def vis_hist(his, skip = 1, names = None):
     # visualize all histories as subplots on the same figure
 
@@ -296,22 +306,22 @@ def quad_cost(ssa_samples, w_s, n_action, n_state, w_a):
     rew = rew.reshape(-1, 1)
     return rew
 
-def add_quadratic_cost_stack(ssa_samples, n_action, w_s = 0.8, cost_func = None):
+def add_quadratic_cost_stack(ssa_samples, n_action, w_s = 1, stage_cost_func = None):
     """
     Add a quadratic reward stack to the samples.
     The reward is calculated as:
     reward = -1/2 * ||s - s_target||^2 * w_s - 1/2 * ||a||^2 * w_a
     where w_s and w_a are the weights for the state and action respectively.
     """
-    if cost_func is None:
-        cost_func = quad_cost
+    if stage_cost_func is None:
+        stage_cost_func = quad_cost
     n_total = ssa_samples.shape[1]
     n_state = (n_total - n_action)//2
     
     # init reward stack 
     assert w_s >= 0 and w_s <= 1, "w_s should be between 0 and 1"
     w_a = np.sqrt(1 - w_s**2)
-    rew = cost_func(ssa_samples, w_s, n_action, n_state, w_a)
+    rew = stage_cost_func(ssa_samples, w_s, n_action, n_state, w_a)
     # print(f"rew.shape", rew.shape)
     
     return np.concatenate([ssa_samples, rew], axis=1)
@@ -340,6 +350,7 @@ def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = T
 
         ssa_samples.append( np.concatenate([state - s_target, next_state - s_target, action], axis = 0))
     ssa_samples = np.array(ssa_samples)
+
     # print(f"ssa_samples.shape: {ssa_samples.shape}")
     if normalize:
         # Normalize the samples
@@ -351,6 +362,7 @@ def create_ssa_samples(params, states, s_target, n_samples = 1000, normalize = T
         ssa_samples[:, n_s:2*n_s] = (ssa_samples[:, n_s:2*n_s] - mean_s) / std_s
         ssa_samples[:, 2*n_s:] = (ssa_samples[:, 2*n_s:]) / std_a # for action, we only normalize by std, not mean, because action is centered around 0
         return ssa_samples, [mean_s, mean_a], [std_s, std_a]
+
 
     return ssa_samples, [], []
 

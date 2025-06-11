@@ -12,8 +12,6 @@ from policy import Policy
 from basis_functions import QuadraticBasisFunction
 
 
-
-
 class QuadraticPolicy(Policy):
     """Implements LSPI policy with quadratic programming for continuous control."""
     
@@ -38,6 +36,8 @@ class QuadraticPolicy(Policy):
             self.scale_a = 1.
             self.offset_s = 0.
             self.offset_a = 0.
+        if weights is None:
+            weights = np.random.uniform(0., 1.0, size=(self.n_basis,))
         
         super().__init__(self.basis, discount, explore, weights)
         
@@ -64,11 +64,12 @@ class QuadraticPolicy(Policy):
         # if action.shape[0] < 0 or action >= self.n_action:
         #     raise IndexError('action must be in range [0, num_actions)')
     
-        self.Huu, self.Hf = self.extract_qp_parameters(state)
-        q = 0 
-        # q += 0.5 * action[None,:] @ self.Huu @ action[:,None]  # for testing
-        q += self.Hf @ action[:,None] # linear term
-        return q # self.weights.dot(self.basis.evaluate(state, action))
+        # self.Huu, self.Hf = self.extract_qp_parameters(state)
+        # q = 0 
+        # # q += 0.5 * action[None,:] @ self.Huu @ action[:,None]  # for testing
+        # q += self.Hf @ action[:,None] # linear term
+        # return q 
+        return self.basis.evaluate(state, action) @ self.weights
     
     def calc_stage_cost(self, state, action):
         """Calculate stage cost for a given state-action pair."""
@@ -89,7 +90,7 @@ class QuadraticPolicy(Policy):
             return np.random.uniform(low=-0.12, high=0.12, size=self.n_action)
         return self.best_action(state)
     
-    def best_action(self, state):
+    def best_action(self, state): # best action to reduce Q value
         """apply scaling and offsetting of action and state"""
         state = (state - self.offset_s) / self.scale_s
         action = self._best_action(state)
@@ -98,25 +99,11 @@ class QuadraticPolicy(Policy):
 
     def _best_action(self, state):
         self.Huu, self.Hf = self.extract_qp_parameters(state) 
-
-
-        # A = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])  # Action bounds
-        
-        # Ax = np.array([
-        #     -0.01 + self.first_stiff_timing,
-        #     0.5 - self.first_stiff_timing,
-        #     -0.5 + self.second_stiff_timing,
-        #     0.98 - self.second_stiff_timing
-        # ]) # Action bounds
-        
-        # Solve constrained optimization
-        # print(self.Hf)
-
         res = minimize(
-            # fun=lambda a: self.Hf @ a[:,None] + 0.5 * a[None,:] @ self.Huu @ a[:,None] , 
-            fun = lambda a: self.Hf @ a[:,None] ,
+            fun=lambda a: self.Hf @ a[:,None], #+ 0.5 * a[None,:] @ self.Huu @ a[:,None] , 
+            # fun = lambda a: self.Hf @ a[:,None] ,
             x0=np.zeros((self.n_action,)),
-            bounds=[(-0.2, 0.2)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
+            bounds=[(-1,1.)], # for a N(0,1) distribution, it is reasonable to set the bounds to (-3, 3), because 99.7% of the values will fall within this range
             # constraints={'type': 'ineq', 'fun': lambda a: A @ a - Ax}
         )
         action = res.x
